@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import base64
 import socket
@@ -19,9 +20,10 @@ def get_devtools_port() -> Optional[int]:
         pass
     return None
 
-def _send_ws_json_message(host: str, port: int, path: str, message: dict) -> bool:
+def _send_ws_command(host: str, port: int, path: str, message: dict) -> bool:
     """
     Envia uma mensagem JSON através de um frame WebSocket mínimo usando apenas a biblioteca padrão (sockets).
+    Compatível com Chrome DevTools Protocol no Electron/Antigravity.
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(2.0)
@@ -40,21 +42,18 @@ def _send_ws_json_message(host: str, port: int, path: str, message: dict) -> boo
         )
         s.sendall(handshake.encode('ascii'))
         
-        # Lê resposta do handshake
+        # Lê resposta do handshake - aceita qualquer variação de HTTP 101
         resp = s.recv(1024).decode('latin1')
-        if "101 Switching Protocols" not in resp:
+        if "101" not in resp:
             s.close()
             return False
             
-        # Constrói frame de texto WebSocket (opcode 0x1, masked)
+        # Constrói frame de texto WebSocket mascarado (opcode 0x1)
         payload = json.dumps(message).encode('utf-8')
         length = len(payload)
         mask = os.urandom(4)
         
-        # Byte 1: FIN (0x80) | Text Opcode (0x01) = 0x81
         frame = bytearray([0x81])
-        
-        # Byte 2: Masked (0x80) | length
         if length <= 125:
             frame.append(0x80 | length)
         elif length <= 65535:
@@ -65,8 +64,7 @@ def _send_ws_json_message(host: str, port: int, path: str, message: dict) -> boo
             frame.extend(length.to_bytes(8, byteorder='big'))
             
         frame.extend(mask)
-        masked_payload = bytearray(payload[i] ^ mask[i % 4] for i in range(length))
-        frame.extend(masked_payload)
+        frame.extend(bytearray(payload[i] ^ mask[i % 4] for i in range(length)))
         
         s.sendall(frame)
         s.close()
@@ -80,14 +78,14 @@ def _send_ws_json_message(host: str, port: int, path: str, message: dict) -> boo
 
 def reload_antigravity_window() -> Dict[str, Any]:
     """
-    Recarrega a janela do Antigravity IDE enviando o comando 'Page.reload'
-    via protocolo Chrome DevTools.
+    Recarrega a janela do Antigravity IDE enviando sinais de reload
+    via protocolo Chrome DevTools do Electron.
     """
     port = get_devtools_port()
     if not port:
         return {
             "success": False,
-            "message": "Janela do Antigravity não encontrada ou porta DevTools indisponível. Pressione Ctrl+Shift+P -> 'Developer: Reload Window'."
+            "message": "Porta do Antigravity não encontrada. Pressione F1 no Antigravity e digite 'Reload Window'."
         }
 
     try:
@@ -101,22 +99,34 @@ def reload_antigravity_window() -> Dict[str, Any]:
             if target.get("type") == "page":
                 tid = target.get("id")
                 path = f"/devtools/page/{tid}"
-                ok = _send_ws_json_message("127.0.0.1", port, path, {"id": 1, "method": "Page.reload"})
-                if ok:
+                # 1. Envia comando Page.reload
+                ok1 = _send_ws_command("127.0.0.1", port, path, {"id": 1, "method": "Page.reload"})
+                # 2. Envia também window.location.reload() para garantir atualização do renderer
+                ok2 = _send_ws_command("127.0.0.1", port, path, {
+                    "id": 2,
+                    "method": "Runtime.evaluate",
+                    "params": {"expression": "window.location.reload()"}
+                })
+                if ok1 or ok2:
                     reloaded += 1
 
         if reloaded > 0:
             return {
                 "success": True,
-                "message": f"Janela do Antigravity recarregada com sucesso ({reloaded} janela(s) atualizada(s))!"
+                "message": f"Janela do Antigravity recarregada com sucesso!"
             }
         else:
             return {
                 "success": False,
-                "message": "Não foi possível enviar o sinal de reload. Pressione Ctrl+Shift+P no Antigravity e escolha 'Reload Window'."
+                "message": "Não foi possível enviar o sinal. Pressione F1 no Antigravity e digite 'Reload Window'."
             }
     except Exception as e:
         return {
             "success": False,
-            "message": f"Falha ao recarregar Antigravity: {str(e)}. Use Ctrl+Shift+P -> 'Developer: Reload Window'."
+            "message": f"Erro ao conectar com Antigravity: {str(e)}. Use F1 -> 'Reload Window'."
         }
+
+if __name__ == "__main__":
+    print("Enviando sinal de reload para o Antigravity IDE...")
+    res = reload_antigravity_window()
+    print("Resultado:", res.get("message"))

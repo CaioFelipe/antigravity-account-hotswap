@@ -163,7 +163,13 @@ class HotswapTkinterApp:
             return
         res = self.switcher.switch_to_account(acc_id)
         if res.get("success"):
-            messagebox.showinfo("Sucesso", f"{res.get('message')}\n\nClique em 'Recarregar Janela do Antigravity' para atualizar a interface do IDE imediatamente!")
+            reload_res = reload_antigravity_window()
+            msg = res.get("message")
+            if reload_res.get("success"):
+                msg += "\n\nJanela do Antigravity recarregada automaticamente com a nova conta!"
+            else:
+                msg += "\n\nPara atualizar o IDE, pressione F1 no Antigravity e tecle Enter em 'Reload Window'."
+            messagebox.showinfo("Sucesso", msg)
             self.refresh_data()
         else:
             messagebox.showerror("Erro", res.get("message"))

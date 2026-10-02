@@ -547,8 +547,8 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn btn-reload" onclick="recarregarIde()" title="Aplica a conta ativa diretamente na janela do Antigravity IDE">
-        🔄 Recarregar Janela do Antigravity
+      <button class="btn btn-reload" onclick="recarregarIde()" title="Recarrega a janela do Antigravity. Atalho no teclado: Pressione F1 no Antigravity e tecle Enter em 'Reload Window'">
+        🔄 Recarregar Janela (F1)
       </button>
       <button class="btn btn-primary" onclick="abrirModalNovaConta()">
         ➕ Adicionar Nova Conta
@@ -773,7 +773,11 @@
         });
         const data = await res.json();
         if (data.success) {
-          showToast(`✅ ${data.message} Clique em "Recarregar Janela do Antigravity" para aplicar imediatamente.`);
+          showToast(`✅ ${data.message} Atualizando Antigravity...`);
+          // Aplica o reload no Antigravity automaticamente!
+          try {
+            await fetch("/api/reload_ide", { method: "POST" });
+          } catch (_) {}
         } else {
           showToast(`❌ ${data.message}`);
         }
@@ -790,7 +794,7 @@
         const data = await res.json();
         showToast(data.message);
       } catch (e) {
-        showToast("Falha ao recarregar IDE. Use Ctrl+Shift+P -> 'Developer: Reload Window'.");
+        showToast("Use o atalho no teclado: Pressione F1 no Antigravity e tecle Enter em 'Reload Window'.");
       }
     }
 
