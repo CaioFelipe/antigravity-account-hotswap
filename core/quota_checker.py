@@ -10,11 +10,19 @@ import psutil
 
 PROXY_ACCOUNTS_FILE = Path(os.path.expanduser("~/.config/antigravity-proxy/accounts.json"))
 
+_cached_ls_info: Optional[Dict[str, Any]] = None
+_last_ls_check: float = 0.0
+
 def _get_active_ls_info() -> Optional[Dict[str, Any]]:
     """
     Localiza dinamicamente o language_server.exe em execução,
-    extrai a porta HTTP e o csrf_token.
+    extrai a porta HTTP e o csrf_token com cache de 3 segundos.
     """
+    global _cached_ls_info, _last_ls_check
+    now = time.time()
+    if _cached_ls_info is not None and (now - _last_ls_check) < 3.0:
+        return _cached_ls_info
+
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             name = proc.info.get('name') or ''
@@ -43,17 +51,20 @@ def _get_active_ls_info() -> Optional[Dict[str, Any]]:
                         with urllib.request.urlopen(req, timeout=1.5) as resp:
                             data = json.loads(resp.read().decode())
                             us = data.get("userStatus", {})
-                            return {
+                            _cached_ls_info = {
                                 "email": us.get("email", "").lower(),
                                 "name": us.get("name", ""),
                                 "port": port,
                                 "csrf": csrf,
                                 "raw_status": us
                             }
+                            _last_ls_check = now
+                            return _cached_ls_info
                     except Exception:
                         continue
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
+    _last_ls_check = now
     return None
 
 def _parse_iso_to_seconds_left(iso_str: str) -> int:
