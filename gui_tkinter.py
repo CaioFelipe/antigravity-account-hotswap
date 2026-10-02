@@ -12,7 +12,7 @@ sys.path.insert(0, str(BASE_DIR))
 from core.vault import AccountsVault
 from core.switcher import AccountSwitcher
 from core.oauth_capture import enrollment_manager
-from core.ide_reloader import restart_antigravity_app, apply_hotswap_reload
+from core.ide_reloader import restart_antigravity_app, apply_hotswap_reload, send_continue_to_antigravity
 
 class HotswapTkinterApp:
     def __init__(self, root: tk.Tk):
@@ -63,6 +63,20 @@ class HotswapTkinterApp:
         self.lbl_active = ttk.Label(info_frame, text="Conta Ativa no Antigravity: Carregando...", font=("Segoe UI", 10, "bold"))
         self.lbl_active.pack(side="left")
 
+        self.var_auto_continue = tk.BooleanVar(value=True)
+        chk_continue = tk.Checkbutton(
+            info_frame,
+            text="Auto-Continue após Hot-Swap",
+            variable=self.var_auto_continue,
+            bg="#0a0d14",
+            fg="#93c5fd",
+            selectcolor="#121722",
+            activebackground="#0a0d14",
+            activeforeground="#60a5fa",
+            font=("Segoe UI", 9, "bold")
+        )
+        chk_continue.pack(side="right", padx=10)
+
         self.lbl_pool = ttk.Label(info_frame, text="0 contas", foreground="#94a3b8")
         self.lbl_pool.pack(side="right")
 
@@ -98,6 +112,9 @@ class HotswapTkinterApp:
 
         btn_swap = tk.Button(btn_frame, text="⚡ Usar Conta Selecionada (Hot-Swap)", bg="#2563eb", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=14, pady=7, command=self.action_swap_selected)
         btn_swap.pack(side="left", padx=4)
+
+        btn_continue = tk.Button(btn_frame, text="▶ Enviar Continue", bg="#1e283d", fg="#60a5fa", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=7, command=self.action_send_continue)
+        btn_continue.pack(side="left", padx=4)
 
         btn_restart = tk.Button(btn_frame, text="🔄 Reiniciar Antigravity (1-Clique)", bg="#7c3aed", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=7, command=self.action_restart_ide)
         btn_restart.pack(side="left", padx=4)
@@ -162,17 +179,27 @@ class HotswapTkinterApp:
             messagebox.showwarning("Aviso", "Selecione uma conta na tabela para ativar.")
             return
 
-        res = self.switcher.switch_to_account(acc_id, auto_reload=True)
+        auto_continue = self.var_auto_continue.get()
+        res = self.switcher.switch_to_account(acc_id, auto_reload=True, auto_continue=auto_continue)
         if res.get("success"):
-            messagebox.showinfo("Sucesso", f"{res.get('message')}\n\nO Antigravity foi atualizado com a nova conta!")
+            cont_msg = "\n\nO agente continuará automaticamente a tarefa!" if auto_continue else ""
+            messagebox.showinfo("Sucesso", f"{res.get('message')}{cont_msg}")
             self.refresh_data()
         else:
             messagebox.showerror("Erro", res.get("message"))
 
+    def action_send_continue(self):
+        res = send_continue_to_antigravity(prompt_text="continue")
+        if res.get("success"):
+            messagebox.showinfo("Sucesso", res.get("message"))
+        else:
+            messagebox.showwarning("Aviso", res.get("message"))
+
     def action_restart_ide(self):
         if not messagebox.askyesno("Reiniciar Antigravity", "Deseja reiniciar o Antigravity agora? O app fechará e reabrirá automaticamente em 2 segundos."):
             return
-        res = restart_antigravity_app()
+        auto_continue = self.var_auto_continue.get()
+        res = restart_antigravity_app(auto_continue=auto_continue)
         messagebox.showinfo("Antigravity", res.get("message"))
 
     def action_enroll_new(self):

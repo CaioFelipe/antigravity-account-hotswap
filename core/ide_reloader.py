@@ -1,8 +1,10 @@
 import os
 import sys
+import time
 import json
 import base64
 import socket
+import threading
 import urllib.request
 import subprocess
 from pathlib import Path
@@ -162,7 +164,103 @@ def reload_antigravity_window() -> Dict[str, Any]:
             "message": f"Erro ao comunicar com DevTools: {str(e)}"
         }
 
-def restart_antigravity_app() -> Dict[str, Any]:
+def send_continue_to_antigravity(prompt_text: str = "continue") -> Dict[str, Any]:
+    """
+    Injeta e envia automaticamente uma mensagem (por padrão 'continue')
+    no chat do Google Antigravity através do Chrome DevTools Protocol.
+    """
+    port = get_devtools_port()
+    if not port:
+        return {"success": False, "message": "DevTools do Antigravity não disponível"}
+
+    try:
+        url = f"http://127.0.0.1:{port}/json/list"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            targets = json.loads(resp.read().decode())
+
+        pages = [t for t in targets if t.get("type") == "page"]
+        if not pages:
+            return {"success": False, "message": "Página de chat do Antigravity não encontrada"}
+
+        tid = pages[0]["id"]
+        path = f"/devtools/page/{tid}"
+
+        escaped_prompt = json.dumps(prompt_text)
+
+        # Injeta no Lexical Editor e simula envio automático
+        js_code = f"""
+        (() => {{
+            const editor = document.querySelector('[contenteditable="true"], [aria-label="Message input"]');
+            if (!editor) return {{ ok: false, error: 'editor_not_found' }};
+
+            const card = editor.closest('.bg-card') || editor.parentElement;
+
+            // 1. Foca o editor de texto
+            editor.focus();
+
+            // 2. Insere o comando
+            try {{
+                document.execCommand('insertText', false, {escaped_prompt});
+            }} catch (e) {{
+                editor.innerText = {escaped_prompt};
+            }}
+
+            // 3. Submete automaticamente a mensagem
+            setTimeout(() => {{
+                const buttons = card ? Array.from(card.querySelectorAll('button')) : [];
+                const submitBtn = buttons.find(b => {{
+                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                    return !aria.includes('context') && !aria.includes('model') && !aria.includes('voice') && !aria.includes('memo') && !aria.includes('cancel');
+                }});
+
+                if (submitBtn) {{
+                    submitBtn.click();
+                }} else {{
+                    const ev = new KeyboardEvent('keydown', {{
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        which: 13,
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    editor.dispatchEvent(ev);
+                }}
+            }}, 150);
+
+            return {{ ok: true }};
+        }})()
+        """
+
+        ok = _send_ws_command("127.0.0.1", port, path, {
+            "id": 999,
+            "method": "Runtime.evaluate",
+            "params": {
+                "expression": js_code,
+                "returnByValue": True
+            }
+        })
+
+        if ok:
+            return {"success": True, "message": f"Comando '{prompt_text}' injetado no Antigravity!"}
+        return {"success": False, "message": "Falha no envio via WebSocket DevTools"}
+    except Exception as e:
+        return {"success": False, "message": f"Erro ao injetar comando: {str(e)}"}
+
+def schedule_auto_continue(delay_seconds: float = 3.0, prompt_text: str = "continue"):
+    """
+    Agenda o envio do 'continue' em segundo plano, aguardando
+    o tempo de reconexão do Language Server e do chat do Antigravity.
+    """
+    def _worker():
+        time.sleep(delay_seconds)
+        send_continue_to_antigravity(prompt_text=prompt_text)
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 4.5) -> Dict[str, Any]:
     """
     Reinício 100% completo e limpo do aplicativo Antigravity:
     Encerra Antigravity.exe e language_server.exe e reabre o executável principal.
@@ -188,9 +286,13 @@ def restart_antigravity_app() -> Dict[str, Any]:
             creationflags=creation_flags,
             close_fds=True
         )
+
+        if auto_continue:
+            schedule_auto_continue(delay_seconds=continue_delay)
+
         return {
             "success": True,
-            "message": "O Antigravity está sendo reiniciado agora com a nova conta! Reabrirá em instantes."
+            "message": "O Antigravity está sendo reiniciado agora com a nova conta! O agente continuará automaticamente em instantes."
         }
     except Exception as e:
         return {
@@ -198,22 +300,27 @@ def restart_antigravity_app() -> Dict[str, Any]:
             "message": f"Falha ao disparar reinício do Antigravity: {str(e)}"
         }
 
-def apply_hotswap_reload() -> Dict[str, Any]:
+def apply_hotswap_reload(auto_continue: bool = True, continue_delay: float = 3.0) -> Dict[str, Any]:
     """
     Método padrão chamado após o Hot-Swap:
     1. Reinicia o language_server para aplicar as novas credenciais.
     2. Recarrega as páginas da interface webview do Antigravity.
+    3. Se auto_continue=True, envia automaticamente 'continue' para os agentes retomarem a tarefa!
     """
     ls_ok = restart_language_server()
     win_res = reload_antigravity_window()
+
+    if auto_continue:
+        schedule_auto_continue(delay_seconds=continue_delay)
+
     if ls_ok:
         return {
             "success": True,
-            "message": "Antigravity sincronizado com a nova conta!"
+            "message": "Antigravity sincronizado com a nova conta! (Auto-Continue agendado)"
         }
     return win_res
 
 if __name__ == "__main__":
-    print("Recarregando Antigravity IDE...")
-    res = apply_hotswap_reload()
+    print("Testando injeção de continue...")
+    res = send_continue_to_antigravity()
     print("Resultado:", res.get("message"))

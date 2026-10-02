@@ -75,13 +75,14 @@ class AccountSwitcher:
             "now": time.time()
         }
 
-    def switch_to_account(self, account_id: str, auto_reload: bool = True) -> Dict[str, Any]:
+    def switch_to_account(self, account_id: str, auto_reload: bool = True, auto_continue: bool = True) -> Dict[str, Any]:
         """
         Aplica a credencial da conta especificada no Windows Credential Manager:
         1. Renova o access_token e id_token junto à Google para garantir autenticação ativa e válida.
         2. Monta o payload JSON completo exigido pelo Antigravity (com id_token e token expirável).
         3. Grava no cofre do Windows (gemini:antigravity).
         4. Opcionalmente reinicia o Language Server em background para o Antigravity assumir a nova conta na hora.
+        5. Se auto_continue=True, envia 'continue' para os agentes retomarem o trabalho automaticamente.
         """
         account = self.vault.get_account(account_id)
         if not account:
@@ -155,11 +156,11 @@ class AccountSwitcher:
             details={"account_id": account_id, "email": account.get("email")}
         )
 
-        # 5. Aplica reload no Antigravity automaticamente se solicitado
+        # 5. Aplica reload no Antigravity automaticamente se solicitado e agenda Auto-Continue
         reload_msg = ""
         if auto_reload:
             try:
-                reload_res = apply_hotswap_reload()
+                reload_res = apply_hotswap_reload(auto_continue=auto_continue)
                 if reload_res.get("success"):
                     reload_msg = " " + reload_res.get("message", "")
             except Exception:

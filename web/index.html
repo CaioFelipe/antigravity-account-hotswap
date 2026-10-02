@@ -522,6 +522,13 @@
       <div class="brand-name">Antigravity Hot-Swap</div>
     </div>
     <div class="header-actions">
+      <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; color: #93c5fd; cursor: pointer; margin-right: 6px;" title="Envia automaticamente 'continue' para o chat do Antigravity após a troca de conta para os agentes não pararem">
+        <input type="checkbox" id="chkAutoContinue" checked style="accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer;">
+        Auto-Continue
+      </label>
+      <button class="btn btn-secondary" onclick="enviarContinueManual()" title="Envia comando 'continue' diretamente para o chat do Antigravity" style="padding: 7px 12px; font-size: 0.82rem;">
+        ▶ Enviar Continue
+      </button>
       <button class="btn btn-restart" onclick="reiniciarAntigravity()" title="Fecha e reabre o Antigravity em 2 segundos para aplicar a nova conta">
         🔄 Reiniciar Antigravity (1-Clique)
       </button>
@@ -718,14 +725,15 @@
       });
     }
 
-    // Ação de Troca Rápida
+    // Ação de Troca Rápida com Auto-Continue
     async function fazerHotSwap(accountId, accountName) {
+      const autoContinue = document.getElementById("chkAutoContinue") ? document.getElementById("chkAutoContinue").checked : true;
       showToast(`Alternando para '${accountName}'...`);
       try {
         const res = await fetch("/api/switch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ account_id: accountId })
+          body: JSON.stringify({ account_id: accountId, auto_continue: autoContinue })
         });
         const data = await res.json();
         if (data.success) {
@@ -739,14 +747,35 @@
       }
     }
 
+    // Enviar comando 'continue' manualmente para o Antigravity
+    async function enviarContinueManual() {
+      showToast("Enviando 'continue' para o chat do Antigravity...");
+      try {
+        const res = await fetch("/api/send_continue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: "continue" })
+        });
+        const data = await res.json();
+        showToast(data.message);
+      } catch (e) {
+        showToast("Falha ao enviar comando para o Antigravity.");
+      }
+    }
+
     // Reinício Completo do Antigravity (1-Clique)
     async function reiniciarAntigravity() {
       if (!confirm("Deseja reiniciar o Antigravity agora? O aplicativo fechará e reabrirá automaticamente em 2 segundos.")) {
         return;
       }
+      const autoContinue = document.getElementById("chkAutoContinue") ? document.getElementById("chkAutoContinue").checked : true;
       showToast("Reiniciando o Antigravity em 2 segundos...");
       try {
-        const res = await fetch("/api/restart_ide", { method: "POST" });
+        const res = await fetch("/api/restart_ide", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ auto_continue: autoContinue })
+        });
         const data = await res.json();
         showToast(data.message);
       } catch (e) {

@@ -14,7 +14,7 @@ sys.path.insert(0, str(BASE_DIR))
 from core.vault import AccountsVault
 from core.switcher import AccountSwitcher
 from core.oauth_capture import enrollment_manager
-from core.ide_reloader import reload_antigravity_window, restart_antigravity_app, apply_hotswap_reload
+from core.ide_reloader import reload_antigravity_window, restart_antigravity_app, apply_hotswap_reload, send_continue_to_antigravity
 from core.auto_detector import AutoQuotaDetector
 
 PORT = 5055
@@ -103,23 +103,32 @@ class HotswapHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # 1. Hot-Swap de Conta
+        # 1. Hot-Swap de Conta com Auto-Continue
         if path == "/api/switch":
             account_id = payload.get("account_id")
+            auto_continue = payload.get("auto_continue", True)
             if not account_id:
                 self._send_json({"success": False, "message": "ID da conta é obrigatório."}, 400)
                 return
-            res = self.switcher.switch_to_account(account_id)
+            res = self.switcher.switch_to_account(account_id, auto_continue=auto_continue)
             self._send_json(res)
 
-        # 2. Reinício Completo do Antigravity (1-Clique)
+        # 2. Injetar comando 'continue' no chat do Antigravity
+        elif path == "/api/send_continue":
+            prompt = payload.get("prompt", "continue")
+            res = send_continue_to_antigravity(prompt_text=prompt)
+            self._send_json(res)
+
+        # 3. Reinício Completo do Antigravity (1-Clique)
         elif path == "/api/restart_ide":
-            res = restart_antigravity_app()
+            auto_continue = payload.get("auto_continue", True)
+            res = restart_antigravity_app(auto_continue=auto_continue)
             self._send_json(res)
 
-        # 3. Recarregar / Sincronizar Antigravity sem fechar janela
+        # 4. Recarregar / Sincronizar Antigravity sem fechar janela
         elif path == "/api/reload_ide":
-            res = apply_hotswap_reload()
+            auto_continue = payload.get("auto_continue", True)
+            res = apply_hotswap_reload(auto_continue=auto_continue)
             self._send_json(res)
 
         # 4. Cadastro Automático de Nova Conta Google
