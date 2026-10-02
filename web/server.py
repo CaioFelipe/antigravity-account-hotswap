@@ -14,7 +14,7 @@ sys.path.insert(0, str(BASE_DIR))
 from core.vault import AccountsVault
 from core.switcher import AccountSwitcher
 from core.oauth_capture import enrollment_manager
-from core.ide_reloader import reload_antigravity_window
+from core.ide_reloader import reload_antigravity_window, restart_antigravity_app, apply_hotswap_reload
 from core.auto_detector import AutoQuotaDetector
 
 PORT = 5055
@@ -41,7 +41,7 @@ class HotswapHandler(BaseHTTPRequestHandler):
     detector = AutoQuotaDetector(vault=vault, switcher=switcher)
 
     def log_message(self, format, *args):
-        # Silencia logs de requisição no console para manter saída limpa
+        # Silencia logs no terminal para manter console legível
         pass
 
     def _send_json(self, data, status=200):
@@ -112,40 +112,40 @@ class HotswapHandler(BaseHTTPRequestHandler):
             res = self.switcher.switch_to_account(account_id)
             self._send_json(res)
 
-        # 2. Recarregar Antigravity IDE Window
-        elif path == "/api/reload_ide":
-            res = reload_antigravity_window()
+        # 2. Reinício Completo do Antigravity (1-Clique)
+        elif path == "/api/restart_ide":
+            res = restart_antigravity_app()
             self._send_json(res)
 
-        # 3. Fluxo de Cadastro de Nova Conta
+        # 3. Recarregar / Sincronizar Antigravity sem fechar janela
+        elif path == "/api/reload_ide":
+            res = apply_hotswap_reload()
+            self._send_json(res)
+
+        # 4. Cadastro Automático de Nova Conta Google
         elif path == "/api/accounts/enroll":
             name = payload.get("name", "Nova Conta Google")
             res = enrollment_manager.start_enrollment(name)
-            self._send_json(res)
-
-        elif path == "/api/accounts/submit_code":
-            code = payload.get("code", "")
-            res = enrollment_manager.submit_code(code)
             self._send_json(res)
 
         elif path == "/api/accounts/cancel_enroll":
             res = enrollment_manager.cancel_enrollment()
             self._send_json(res)
 
-        # 4. Capturar Conta do Windows (Manual)
+        # 5. Capturar Conta do Windows (Manual)
         elif path == "/api/accounts/capture_active":
             name = payload.get("name", "Conta Capturada")
             email = payload.get("email", "")
             res = self.switcher.capture_active_wincred(name=name, email=email)
             self._send_json(res)
 
-        # 5. Excluir Conta
+        # 6. Excluir Conta
         elif path == "/api/accounts/delete":
             account_id = payload.get("account_id")
             success = self.vault.remove_account(account_id)
             self._send_json({"success": success, "message": "Conta removida do cofre." if success else "Falha ao remover conta."})
 
-        # 6. Reset Manual de Cooldown
+        # 7. Reset Manual de Cooldown
         elif path == "/api/reset_cooldown":
             account_id = payload.get("account_id")
             acc = self.vault.clear_account_cooldown(account_id)

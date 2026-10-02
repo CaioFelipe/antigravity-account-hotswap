@@ -12,14 +12,14 @@ sys.path.insert(0, str(BASE_DIR))
 from core.vault import AccountsVault
 from core.switcher import AccountSwitcher
 from core.oauth_capture import enrollment_manager
-from core.ide_reloader import reload_antigravity_window
+from core.ide_reloader import restart_antigravity_app, apply_hotswap_reload
 
 class HotswapTkinterApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Antigravity Hot-Swap de Contas")
-        self.root.geometry("820x540")
-        self.root.minsize(720, 480)
+        self.root.geometry("860x560")
+        self.root.minsize(740, 480)
 
         self.vault = AccountsVault()
         self.switcher = AccountSwitcher(self.vault)
@@ -81,9 +81,9 @@ class HotswapTkinterApp:
 
         self.tree.column("id", width=55, anchor="center")
         self.tree.column("name", width=150, anchor="w")
-        self.tree.column("email", width=180, anchor="w")
-        self.tree.column("status", width=120, anchor="center")
-        self.tree.column("quota_5h", width=190, anchor="center")
+        self.tree.column("email", width=190, anchor="w")
+        self.tree.column("status", width=110, anchor="center")
+        self.tree.column("quota_5h", width=200, anchor="center")
         self.tree.column("quota_weekly", width=140, anchor="center")
 
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -99,8 +99,8 @@ class HotswapTkinterApp:
         btn_swap = tk.Button(btn_frame, text="⚡ Usar Conta Selecionada (Hot-Swap)", bg="#2563eb", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=14, pady=7, command=self.action_swap_selected)
         btn_swap.pack(side="left", padx=4)
 
-        btn_reload = tk.Button(btn_frame, text="🔄 Recarregar Janela do Antigravity", bg="#7c3aed", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=7, command=self.action_reload_ide)
-        btn_reload.pack(side="left", padx=4)
+        btn_restart = tk.Button(btn_frame, text="🔄 Reiniciar Antigravity (1-Clique)", bg="#7c3aed", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=7, command=self.action_restart_ide)
+        btn_restart.pack(side="left", padx=4)
 
         btn_add = tk.Button(btn_frame, text="➕ Nova Conta Google", bg="#059669", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=7, command=self.action_enroll_new)
         btn_add.pack(side="right", padx=4)
@@ -144,7 +144,7 @@ class HotswapTkinterApp:
             badge_5h = q5h.get("badge", "100% Livre")
             badge_week = q_week.get("badge", "100% Disponível")
 
-            item = self.tree.insert("", "end", iid=acc_id, values=(acc_id, acc.get("name"), acc.get("email"), status_txt, badge_5h, badge_week))
+            self.tree.insert("", "end", iid=acc_id, values=(acc_id, acc.get("name"), acc.get("email"), status_txt, badge_5h, badge_week))
             if selected_id == acc_id:
                 self.tree.selection_set(acc_id)
 
@@ -161,29 +161,23 @@ class HotswapTkinterApp:
         if not acc_id:
             messagebox.showwarning("Aviso", "Selecione uma conta na tabela para ativar.")
             return
-        res = self.switcher.switch_to_account(acc_id)
+
+        res = self.switcher.switch_to_account(acc_id, auto_reload=True)
         if res.get("success"):
-            reload_res = reload_antigravity_window()
-            msg = res.get("message")
-            if reload_res.get("success"):
-                msg += "\n\nJanela do Antigravity recarregada automaticamente com a nova conta!"
-            else:
-                msg += "\n\nPara atualizar o IDE, pressione F1 no Antigravity e tecle Enter em 'Reload Window'."
-            messagebox.showinfo("Sucesso", msg)
+            messagebox.showinfo("Sucesso", f"{res.get('message')}\n\nO Antigravity foi atualizado com a nova conta!")
             self.refresh_data()
         else:
             messagebox.showerror("Erro", res.get("message"))
 
-    def action_reload_ide(self):
-        res = reload_antigravity_window()
-        if res.get("success"):
-            messagebox.showinfo("Sucesso", res.get("message"))
-        else:
-            messagebox.showwarning("Aviso", res.get("message"))
+    def action_restart_ide(self):
+        if not messagebox.askyesno("Reiniciar Antigravity", "Deseja reiniciar o Antigravity agora? O app fechará e reabrirá automaticamente em 2 segundos."):
+            return
+        res = restart_antigravity_app()
+        messagebox.showinfo("Antigravity", res.get("message"))
 
     def action_enroll_new(self):
-        name = simpledialog.askstring("Cadastrar Nova Conta", "Informe um apelido para a nova conta Google:")
-        if not name:
+        name = simpledialog.askstring("Cadastrar Nova Conta", "Informe um apelido para a nova conta Google (opcional):", initialvalue="Conta Google")
+        if name is None:
             return
 
         res = enrollment_manager.start_enrollment(account_name=name)
@@ -191,20 +185,31 @@ class HotswapTkinterApp:
             messagebox.showerror("Erro", res.get("message"))
             return
 
-        code = simpledialog.askstring(
-            "Autorização Google",
-            "O navegador foi aberto na página do Google.\nFaça login e copie o código de autorização (inicia com 4/0...).\n\nCole o código abaixo:"
-        )
-        if not code:
-            enrollment_manager.cancel_enrollment()
-            return
+        # Abre janela de espera não bloqueante
+        wait_win = tk.Toplevel(self.root)
+        wait_win.title("Aguardando Login Google")
+        wait_win.geometry("420x180")
+        wait_win.configure(bg="#121722")
+        wait_win.resizable(False, False)
 
-        submit_res = enrollment_manager.submit_code(code)
-        if submit_res.get("success"):
-            messagebox.showinfo("Sucesso", submit_res.get("message"))
-            self.refresh_data()
-        else:
-            messagebox.showerror("Erro", submit_res.get("message"))
+        tk.Label(wait_win, text="🌐 Autorização no Navegador", font=("Segoe UI", 11, "bold"), fg="#60a5fa", bg="#121722").pack(pady=(16, 6))
+        tk.Label(wait_win, text="O seu navegador foi aberto na página do Google.\nFaça o login e confirme as permissões.\n\nEsta janela fechará automaticamente.", font=("Segoe UI", 9), fg="#94a3b8", bg="#121722", justify="center").pack(pady=4)
+
+        def poll_enroll():
+            st = enrollment_manager.get_status()
+            if st.get("state") == "completed":
+                wait_win.destroy()
+                acc = st.get("account") or {}
+                messagebox.showinfo("Sucesso", f"Conta {acc.get('name')} ({acc.get('email')}) conectada e registrada com sucesso!")
+                self.refresh_data()
+            elif st.get("state") == "error":
+                wait_win.destroy()
+                messagebox.showerror("Erro", st.get("error_message") or "Erro na autenticação.")
+            else:
+                wait_win.after(1000, poll_enroll)
+
+        wait_win.protocol("WM_DELETE_WINDOW", lambda: (enrollment_manager.cancel_enrollment(), wait_win.destroy()))
+        poll_enroll()
 
     def action_delete(self):
         acc_id = self._get_selected_account_id()

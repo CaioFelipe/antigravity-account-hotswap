@@ -4,12 +4,15 @@ import json
 import base64
 import socket
 import urllib.request
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 DEVTOOLS_PORT_FILE = Path(os.path.expanduser(r"~\AppData\Roaming\Antigravity\DevToolsActivePort"))
+ANTIGRAVITY_EXE = Path(os.path.expanduser(r"~\AppData\Local\Programs\antigravity\Antigravity.exe"))
 
 def get_devtools_port() -> Optional[int]:
+    """Obtém a porta ativa do DevTools do Electron/Antigravity."""
     if not DEVTOOLS_PORT_FILE.exists():
         return None
     try:
@@ -76,6 +79,41 @@ def _send_ws_command(host: str, port: int, path: str, message: dict) -> bool:
             pass
         return False
 
+def restart_language_server() -> bool:
+    """
+    Reinicia o language_server do Antigravity via RPC interno.
+    Isso força a releitura imediata das novas credenciais do cofre sem fechar a janela.
+    """
+    try:
+        from .quota_checker import _get_active_ls_info
+        info = _get_active_ls_info()
+        if not info:
+            return False
+
+        port = info.get("port")
+        csrf = info.get("csrf")
+        if not port:
+            return False
+
+        url = f"http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/Restart"
+        req = urllib.request.Request(
+            url,
+            data=b"{}",
+            headers={
+                "Content-Type": "application/json",
+                "x-codeium-csrf-token": csrf
+            }
+        )
+        try:
+            # Como o processo morre ao reiniciar, timeout curto é esperado
+            urllib.request.urlopen(req, timeout=1.0)
+            return True
+        except Exception:
+            # Se a conexão for fechada abruptamente pelo servidor caindo, é sinal de sucesso
+            return True
+    except Exception:
+        return False
+
 def reload_antigravity_window() -> Dict[str, Any]:
     """
     Recarrega a janela do Antigravity IDE enviando sinais de reload
@@ -85,7 +123,7 @@ def reload_antigravity_window() -> Dict[str, Any]:
     if not port:
         return {
             "success": False,
-            "message": "Porta do Antigravity não encontrada. Pressione F1 no Antigravity e digite 'Reload Window'."
+            "message": "DevTools não disponível no momento."
         }
 
     try:
@@ -99,9 +137,7 @@ def reload_antigravity_window() -> Dict[str, Any]:
             if target.get("type") == "page":
                 tid = target.get("id")
                 path = f"/devtools/page/{tid}"
-                # 1. Envia comando Page.reload
                 ok1 = _send_ws_command("127.0.0.1", port, path, {"id": 1, "method": "Page.reload"})
-                # 2. Envia também window.location.reload() para garantir atualização do renderer
                 ok2 = _send_ws_command("127.0.0.1", port, path, {
                     "id": 2,
                     "method": "Runtime.evaluate",
@@ -113,20 +149,71 @@ def reload_antigravity_window() -> Dict[str, Any]:
         if reloaded > 0:
             return {
                 "success": True,
-                "message": f"Janela do Antigravity recarregada com sucesso!"
+                "message": "Interface do Antigravity recarregada com sucesso!"
             }
         else:
             return {
                 "success": False,
-                "message": "Não foi possível enviar o sinal. Pressione F1 no Antigravity e digite 'Reload Window'."
+                "message": "Nenhuma página ativa encontrada para recarregar."
             }
     except Exception as e:
         return {
             "success": False,
-            "message": f"Erro ao conectar com Antigravity: {str(e)}. Use F1 -> 'Reload Window'."
+            "message": f"Erro ao comunicar com DevTools: {str(e)}"
         }
 
+def restart_antigravity_app() -> Dict[str, Any]:
+    """
+    Reinício 100% completo e limpo do aplicativo Antigravity:
+    Encerra Antigravity.exe e language_server.exe e reabre o executável principal.
+    Restaura automaticamente workspace e conversas ativas.
+    """
+    exe_path = str(ANTIGRAVITY_EXE)
+    if not ANTIGRAVITY_EXE.exists():
+        exe_path = "Antigravity.exe"
+
+    cmd = (
+        f"Get-Process Antigravity, language_server -ErrorAction SilentlyContinue | Stop-Process -Force; "
+        f"Start-Sleep -Milliseconds 800; "
+        f"Start-Process '{exe_path}'"
+    )
+
+    try:
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
+
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
+            creationflags=creation_flags,
+            close_fds=True
+        )
+        return {
+            "success": True,
+            "message": "O Antigravity está sendo reiniciado agora com a nova conta! Reabrirá em instantes."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Falha ao disparar reinício do Antigravity: {str(e)}"
+        }
+
+def apply_hotswap_reload() -> Dict[str, Any]:
+    """
+    Método padrão chamado após o Hot-Swap:
+    1. Reinicia o language_server para aplicar as novas credenciais.
+    2. Recarrega as páginas da interface webview do Antigravity.
+    """
+    ls_ok = restart_language_server()
+    win_res = reload_antigravity_window()
+    if ls_ok:
+        return {
+            "success": True,
+            "message": "Antigravity sincronizado com a nova conta!"
+        }
+    return win_res
+
 if __name__ == "__main__":
-    print("Enviando sinal de reload para o Antigravity IDE...")
-    res = reload_antigravity_window()
+    print("Recarregando Antigravity IDE...")
+    res = apply_hotswap_reload()
     print("Resultado:", res.get("message"))

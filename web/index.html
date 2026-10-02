@@ -21,6 +21,7 @@
       --accent-yellow: #f59e0b;
       --accent-red: #ef4444;
       --accent-purple: #8b5cf6;
+      --accent-purple-hover: #7c3aed;
     }
 
     * {
@@ -114,6 +115,15 @@
       box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
     }
 
+    .btn-success {
+      background-color: var(--accent-green);
+      color: #fff;
+    }
+    .btn-success:hover:not(:disabled) {
+      background-color: #059669;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+    }
+
     .btn-secondary {
       background-color: #1a2233;
       border-color: var(--border-color);
@@ -124,13 +134,36 @@
       border-color: #3b4b6e;
     }
 
-    .btn-reload {
-      background-color: rgba(139, 92, 246, 0.15);
-      border-color: rgba(139, 92, 246, 0.4);
+    .btn-restart {
+      background-color: rgba(139, 92, 246, 0.18);
+      border: 1px solid rgba(139, 92, 246, 0.45);
       color: #c084fc;
     }
-    .btn-reload:hover:not(:disabled) {
-      background-color: rgba(139, 92, 246, 0.25);
+    .btn-restart:hover:not(:disabled) {
+      background-color: rgba(139, 92, 246, 0.3);
+      border-color: #c084fc;
+      box-shadow: 0 0 16px rgba(139, 92, 246, 0.35);
+    }
+
+    .btn-switch {
+      background-color: var(--accent-blue);
+      color: #fff;
+      width: 100%;
+      padding: 10px;
+    }
+    .btn-switch:hover:not(:disabled) {
+      background-color: var(--accent-blue-hover);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-active-state {
+      background-color: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: var(--accent-green);
+      width: 100%;
+      padding: 10px;
+      cursor: default;
+      font-weight: 700;
     }
 
     .btn-delete {
@@ -298,70 +331,63 @@
       font-size: 0.72rem;
       font-weight: 700;
       padding: 3px 8px;
-      border-radius: 6px;
+      border-radius: 20px;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      white-space: nowrap;
     }
 
     .badge-active {
-      background-color: rgba(59, 130, 246, 0.18);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.4);
+      background-color: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
     }
 
     .badge-ready {
-      background-color: rgba(16, 185, 129, 0.15);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.35);
-    }
-
-    .badge-cooldown {
-      background-color: rgba(245, 158, 11, 0.18);
-      color: #fbbf24;
-      border: 1px solid rgba(245, 158, 11, 0.4);
+      background-color: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
     }
 
     /* Quota Section */
     .quota-box {
-      background-color: rgba(10, 13, 20, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background-color: rgba(10, 13, 20, 0.45);
       border: 1px solid rgba(39, 51, 77, 0.6);
       border-radius: 8px;
       padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
     }
 
     .quota-item {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
     }
 
     .quota-item-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.78rem;
+      font-size: 0.8rem;
     }
 
     .quota-label {
-      color: var(--text-secondary);
-      font-weight: 500;
+      color: var(--text-muted);
+      font-weight: 600;
     }
 
     .quota-value {
-      font-weight: 600;
       color: var(--text-primary);
+      font-weight: 700;
     }
 
     .progress-bar-bg {
+      width: 100%;
       height: 6px;
-      background-color: #242f47;
+      background-color: #27334d;
       border-radius: 3px;
       overflow: hidden;
-      width: 100%;
     }
 
     .progress-bar-fill {
@@ -370,52 +396,21 @@
       transition: width 0.3s ease;
     }
 
-    .progress-green {
-      background: linear-gradient(90deg, #10b981, #34d399);
-    }
+    .progress-green { background-color: var(--accent-green); }
+    .progress-yellow { background-color: var(--accent-yellow); }
+    .progress-red { background-color: var(--accent-red); }
 
-    .progress-yellow {
-      background: linear-gradient(90deg, #f59e0b, #fbbf24);
-    }
-
-    .progress-red {
-      background: linear-gradient(90deg, #ef4444, #f87171);
-    }
-
-    /* Card Actions */
     .card-actions {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 8px;
-      margin-top: 4px;
-    }
-
-    .btn-switch {
-      flex: 1;
-      background-color: var(--accent-blue);
-      color: white;
-      padding: 9px 12px;
-      font-size: 0.88rem;
-    }
-    .btn-switch:hover {
-      background-color: var(--accent-blue-hover);
-    }
-
-    .btn-active-state {
-      flex: 1;
-      background-color: rgba(59, 130, 246, 0.12);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      color: #93c5fd;
-      padding: 9px 12px;
-      font-size: 0.84rem;
-      cursor: default;
     }
 
     /* Modal */
-    .modal-backdrop {
+    .modal-overlay {
       position: fixed;
       inset: 0;
-      background-color: rgba(0, 0, 0, 0.75);
+      background-color: rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(4px);
       display: none;
       align-items: center;
@@ -429,11 +424,11 @@
       border-radius: 14px;
       width: 100%;
       max-width: 480px;
-      padding: 26px;
+      padding: 24px;
       display: flex;
       flex-direction: column;
       gap: 18px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     }
 
     .modal-header {
@@ -454,18 +449,18 @@
     }
 
     .form-label {
-      font-size: 0.84rem;
+      font-size: 0.82rem;
+      font-weight: 600;
       color: var(--text-secondary);
-      font-weight: 500;
     }
 
     .form-input {
-      background-color: var(--bg-page);
+      background-color: var(--bg-card);
       border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      padding: 10px 14px;
       border-radius: 8px;
-      font-size: 0.92rem;
+      padding: 10px 14px;
+      color: var(--text-primary);
+      font-size: 0.9rem;
       outline: none;
       transition: border-color 0.15s ease;
     }
@@ -473,35 +468,11 @@
       border-color: var(--border-focus);
     }
 
-    .enroll-step {
-      background-color: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .enroll-step-title {
-      font-size: 0.86rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .enroll-step-desc {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-
     .modal-footer {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      margin-top: 6px;
+      margin-top: 8px;
     }
 
     /* Toast */
@@ -510,25 +481,31 @@
       bottom: 24px;
       right: 24px;
       background-color: #1e283d;
-      border: 1px solid var(--border-color);
+      border: 1px solid #3b82f6;
+      color: #fff;
       padding: 14px 20px;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      color: var(--text-primary);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
       display: none;
-      z-index: 150;
-      max-width: 420px;
+      z-index: 200;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .spinner {
+      display: inline-block;
       width: 16px;
       height: 16px;
-      border: 2px solid rgba(255,255,255,0.3);
+      border: 2px solid rgba(255, 255, 255, 0.3);
       border-radius: 50%;
       border-top-color: #fff;
       animation: spin 0.8s linear infinite;
-      display: inline-block;
     }
 
     @keyframes spin {
@@ -538,100 +515,79 @@
 </head>
 <body>
 
-  <!-- Header -->
+  <!-- Top Navigation -->
   <header>
     <div class="brand">
-      <div class="brand-icon">AG</div>
-      <div>
-        <div class="brand-name">Antigravity Hot-Swap</div>
-      </div>
+      <div class="brand-icon">⚡</div>
+      <div class="brand-name">Antigravity Hot-Swap</div>
     </div>
     <div class="header-actions">
-      <button class="btn btn-reload" onclick="recarregarIde()" title="Recarrega a janela do Antigravity. Atalho no teclado: Pressione F1 no Antigravity e tecle Enter em 'Reload Window'">
-        🔄 Recarregar Janela (F1)
+      <button class="btn btn-restart" onclick="reiniciarAntigravity()" title="Fecha e reabre o Antigravity em 2 segundos para aplicar a nova conta">
+        🔄 Reiniciar Antigravity (1-Clique)
       </button>
-      <button class="btn btn-primary" onclick="abrirModalNovaConta()">
-        ➕ Adicionar Nova Conta
+      <button class="btn btn-success" onclick="abrirModalNovaConta()">
+        ➕ Adicionar Conta Google
       </button>
     </div>
   </header>
 
+  <!-- Main Content -->
   <main>
-    <!-- Top Active Account Banner -->
-    <div class="active-banner" id="activeBanner">
+    <!-- Active Account Banner -->
+    <div class="active-banner">
       <div class="active-banner-info">
         <div class="pulse-dot"></div>
         <div class="active-banner-text">
-          <span class="active-title">Conta em Uso no Antigravity</span>
+          <span class="active-title">Conta Ativa no Antigravity</span>
           <span class="active-account-name" id="valActiveName">Carregando...</span>
-          <span class="active-account-email" id="valActiveEmail">-</span>
+          <span class="active-account-email" id="valActiveEmail">Verificando cofre do sistema...</span>
         </div>
       </div>
-      <div>
-        <button class="btn btn-secondary btn-sm" onclick="capturarContaWindows()" title="Importa a credencial atual salva no Windows se ainda não estiver na lista">
-          📥 Sincronizar Credencial do Windows
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn btn-secondary" onclick="sincronizarAtiva()" style="font-size: 0.8rem; padding: 6px 12px;" title="Captura a credencial que estiver salva no Windows">
+          📥 Sincronizar do Windows
         </button>
       </div>
     </div>
 
     <!-- Accounts Grid -->
-    <section>
-      <div class="grid-header" style="margin-bottom: 14px;">
-        <h2 class="grid-title">Suas Contas Google</h2>
-        <span class="grid-count" id="valAccountsCount">0 contas cadastradas</span>
-      </div>
+    <div class="grid-header">
+      <h2 class="grid-title">Suas Contas</h2>
+      <span class="grid-count" id="valAccountsCount">0 contas</span>
+    </div>
 
-      <div class="accounts-grid" id="accountsGrid">
-        <!-- Rendered via JS -->
-      </div>
-    </section>
+    <div class="accounts-grid" id="accountsGrid">
+      <!-- Cards renderizados dinamicamente -->
+    </div>
   </main>
 
   <!-- Modal Adicionar Conta -->
-  <div class="modal-backdrop" id="modalNovaConta">
+  <div class="modal-overlay" id="modalNovaConta">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Adicionar Nova Conta Google</h3>
-        <button class="btn-delete" onclick="fecharModalNovaConta()" style="font-size: 1.2rem;">✕</button>
+        <h3 class="modal-title">Adicionar Conta Google</h3>
+        <button class="btn-delete" onclick="fecharModalNovaConta()">✕</button>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Identificador / Apelido da Conta</label>
-        <input type="text" id="inputNomeConta" class="form-input" placeholder="Ex: Conta Pessoal ou Secundária">
+        <label class="form-label">Apelido da Conta (opcional)</label>
+        <input type="text" id="inputNomeConta" class="form-input" placeholder="Ex: Conta Secundária ou Unemat">
       </div>
 
-      <!-- Passo 1: Abrir navegador -->
-      <div class="enroll-step">
-        <div class="enroll-step-title">
-          <span>Passo 1: Autenticação Google</span>
-        </div>
-        <p class="enroll-step-desc">
-          Clique no botão abaixo. Seu navegador será aberto automaticamente na página de login da Google para conceder acesso.
-        </p>
-        <button class="btn btn-primary" id="btnIniciarLogin" onclick="iniciarLoginGoogle()" style="width: 100%;">
-          🌐 Abrir Login no Navegador
-        </button>
-        <div id="enrollLinkManual" style="display: none; font-size: 0.78rem; word-break: break-all; margin-top: 4px;">
-          <a href="#" id="linkUrlGoogle" target="_blank" style="color: #60a5fa;">Ou clique aqui para abrir manualmente o link do Google</a>
-        </div>
+      <div style="background: rgba(10, 13, 20, 0.5); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.86rem; color: var(--text-secondary); line-height: 1.5;">
+        Clique no botão abaixo para abrir a página oficial de login do Google. Faça o login e confirme o acesso. O sistema detectará a conta e salvará automaticamente!
       </div>
 
-      <!-- Passo 2: Colar código -->
-      <div class="enroll-step" id="step2Box" style="opacity: 0.6; pointer-events: none;">
-        <div class="enroll-step-title">
-          <span>Passo 2: Confirmar Código</span>
-        </div>
-        <p class="enroll-step-desc">
-          Após fazer login, o Google exibirá um código de autorização (começando com <strong>4/0...</strong>). Copie e cole abaixo:
-        </p>
-        <input type="text" id="inputAuthCode" class="form-input" placeholder="Cole o código do Google aqui (4/0...)">
-        <button class="btn btn-secondary" id="btnConfirmarCodigo" onclick="submeterCodigoGoogle()" style="width: 100%;">
-          ✓ Conectar e Salvar Conta
-        </button>
+      <button class="btn btn-primary" id="btnIniciarLogin" onclick="iniciarLoginGoogle()" style="width: 100%; padding: 12px;">
+        🌐 Abrir Login no Navegador
+      </button>
+
+      <div id="enrollLinkManual" style="display: none; font-size: 0.8rem; word-break: break-all; text-align: center;">
+        <a href="#" id="linkUrlGoogle" target="_blank" style="color: #60a5fa;">Se o navegador não abriu automaticamente, clique aqui</a>
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="fecharModalNovaConta()">Fechar</button>
+        <button class="btn btn-secondary" onclick="fecharModalNovaConta()">Cancelar</button>
       </div>
     </div>
   </div>
@@ -677,7 +633,7 @@
       if (state.accounts.length === 0) {
         grid.innerHTML = `
           <div style="grid-column: 1 / -1; padding: 36px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border-radius: 12px; border: 1px dashed var(--border-color);">
-            Nenhuma conta cadastrada ainda. Clique em <strong>"Adicionar Nova Conta"</strong> ou <strong>"Sincronizar Credencial do Windows"</strong>.
+            Nenhuma conta cadastrada ainda. Clique em <strong>"Adicionar Conta Google"</strong> acima.
           </div>
         `;
         return;
@@ -748,7 +704,7 @@
           <div class="card-actions">
             ${isActive ? `
               <div class="btn btn-active-state">
-                ● Ativa no Antigravity
+                ✓ Ativa no Antigravity
               </div>
             ` : `
               <button class="btn btn-switch" onclick="fazerHotSwap('${acc.id}', '${acc.name}')">
@@ -762,7 +718,7 @@
       });
     }
 
-    // Ações de Troca
+    // Ação de Troca Rápida
     async function fazerHotSwap(accountId, accountName) {
       showToast(`Alternando para '${accountName}'...`);
       try {
@@ -773,11 +729,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          showToast(`✅ ${data.message} Atualizando Antigravity...`);
-          // Aplica o reload no Antigravity automaticamente!
-          try {
-            await fetch("/api/reload_ide", { method: "POST" });
-          } catch (_) {}
+          showToast(`✅ ${data.message}`);
         } else {
           showToast(`❌ ${data.message}`);
         }
@@ -787,19 +739,23 @@
       }
     }
 
-    async function recarregarIde() {
-      showToast("Enviando sinal de atualização para o Antigravity...");
+    // Reinício Completo do Antigravity (1-Clique)
+    async function reiniciarAntigravity() {
+      if (!confirm("Deseja reiniciar o Antigravity agora? O aplicativo fechará e reabrirá automaticamente em 2 segundos.")) {
+        return;
+      }
+      showToast("Reiniciando o Antigravity em 2 segundos...");
       try {
-        const res = await fetch("/api/reload_ide", { method: "POST" });
+        const res = await fetch("/api/restart_ide", { method: "POST" });
         const data = await res.json();
         showToast(data.message);
       } catch (e) {
-        showToast("Use o atalho no teclado: Pressione F1 no Antigravity e tecle Enter em 'Reload Window'.");
+        showToast("Comando enviado.");
       }
     }
 
-    async function capturarContaWindows() {
-      const nome = prompt("Nome identificador para a conta atual do Windows (ex: Conta Principal):", "Conta Antigravity");
+    async function sincronizarAtiva() {
+      const nome = prompt("Apelido para a conta atual do Windows (ex: Conta Principal):", "Conta Antigravity");
       if (!nome) return;
       try {
         const res = await fetch("/api/accounts/capture_active", {
@@ -811,7 +767,7 @@
         showToast(data.message);
         fetchStatus();
       } catch (e) {
-        showToast("Erro ao capturar credencial.");
+        showToast("Erro ao sincronizar credencial.");
       }
     }
 
@@ -831,16 +787,12 @@
       }
     }
 
-    // Modal Nova Conta
+    // Modal Nova Conta Google
     function abrirModalNovaConta() {
       document.getElementById("inputNomeConta").value = "";
-      document.getElementById("inputAuthCode").value = "";
       document.getElementById("btnIniciarLogin").innerHTML = "🌐 Abrir Login no Navegador";
       document.getElementById("btnIniciarLogin").disabled = false;
       document.getElementById("enrollLinkManual").style.display = "none";
-      const step2 = document.getElementById("step2Box");
-      step2.style.opacity = "0.6";
-      step2.style.pointerEvents = "none";
       document.getElementById("modalNovaConta").style.display = "flex";
     }
 
@@ -855,7 +807,7 @@
     async function iniciarLoginGoogle() {
       const name = document.getElementById("inputNomeConta").value.trim() || "Nova Conta Google";
       const btn = document.getElementById("btnIniciarLogin");
-      btn.innerHTML = `<span class="spinner"></span> Aguardando Google...`;
+      btn.innerHTML = `<span class="spinner"></span> Aguardando autorização no navegador...`;
       btn.disabled = true;
 
       try {
@@ -865,9 +817,13 @@
           body: JSON.stringify({ name: name })
         });
         const data = await res.json();
-        showToast("Iniciando login no Google...");
+        if (data.auth_url) {
+          const link = document.getElementById("linkUrlGoogle");
+          link.href = data.auth_url;
+          document.getElementById("enrollLinkManual").style.display = "block";
+        }
 
-        // Começa a sondar o status da autenticação
+        // Inicia polling até concluir
         if (enrollPollInterval) clearInterval(enrollPollInterval);
         enrollPollInterval = setInterval(verificarEnrollStatus, 1500);
       } catch (e) {
@@ -883,18 +839,7 @@
         if (!res.ok) return;
         const st = await res.json();
 
-        if (st.state === "waiting_code") {
-          const step2 = document.getElementById("step2Box");
-          step2.style.opacity = "1";
-          step2.style.pointerEvents = "auto";
-          document.getElementById("btnConfirmarCodigo").className = "btn btn-primary";
-
-          if (st.auth_url) {
-            const link = document.getElementById("linkUrlGoogle");
-            link.href = st.auth_url;
-            document.getElementById("enrollLinkManual").style.display = "block";
-          }
-        } else if (st.state === "completed") {
+        if (st.state === "completed") {
           clearInterval(enrollPollInterval);
           enrollPollInterval = null;
           showToast(`🎉 Conta ${st.account ? st.account.email : ''} conectada com sucesso!`);
@@ -912,43 +857,9 @@
       }
     }
 
-    async function submeterCodigoGoogle() {
-      const code = document.getElementById("inputAuthCode").value.trim();
-      if (!code) {
-        alert("Por favor, cole o código gerado pelo Google.");
-        return;
-      }
-
-      const btn = document.getElementById("btnConfirmarCodigo");
-      btn.innerHTML = `<span class="spinner"></span> Validando com Google...`;
-      btn.disabled = true;
-
-      try {
-        const res = await fetch("/api/accounts/submit_code", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: code })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast(`🎉 ${data.message}`);
-          fecharModalNovaConta();
-          fetchStatus();
-        } else {
-          showToast(`❌ ${data.message}`);
-          btn.innerHTML = "✓ Conectar e Salvar Conta";
-          btn.disabled = false;
-        }
-      } catch (e) {
-        showToast("Erro ao enviar código.");
-        btn.innerHTML = "✓ Conectar e Salvar Conta";
-        btn.disabled = false;
-      }
-    }
-
-    // Inicialização e polling a cada 5 segundos
+    // Inicialização e polling automático
     fetchStatus();
-    setInterval(fetchStatus, 5000);
+    setInterval(fetchStatus, 4000);
   </script>
 </body>
 </html>
