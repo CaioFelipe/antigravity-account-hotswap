@@ -701,6 +701,37 @@
         let qWeeklyColorClass = "progress-green";
         if (qWeekly.percent_remaining < 30) qWeeklyColorClass = "progress-red";
 
+        card.innerHTML = `
+          <div>
+            <div class="card-top">
+              <div class="card-info">
+                <span class="card-name">${acc.name}</span>
+                <span class="card-email">${acc.email}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                ${isActive ? `
+                  <span class="status-badge badge-active">● Em Uso</span>
+                ` : `
+                  <span class="status-badge badge-ready">Disponível</span>
+                `}
+                <button class="btn-delete" onclick="excluirConta('${acc.id}', '${acc.name}')" title="Remover conta do cofre">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div class="quota-box" style="margin-top: 14px;">
+              <!-- 5h Quota -->
+              <div class="quota-item">
+                <div class="quota-item-header">
+                  <span class="quota-label">⏱️ Janela de 5 Horas</span>
+                  <span class="quota-value">${q5h.badge}</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill ${q5hColorClass}" style="width: ${q5h.percent_remaining}%;"></div>
+                </div>
+              </div>
+
               <!-- Weekly Quota -->
               <div class="quota-item">
                 <div class="quota-item-header">
