@@ -74,9 +74,7 @@ def _extract_email_from_blob(blob_str: str) -> Optional[str]:
     """Tenta extrair o e-mail a partir do payload de autenticação OAuth ou JWT."""
     try:
         data = json.loads(blob_str)
-        token_info = data.get("token", {})
-
-        id_token = token_info.get("id_token")
+        id_token = data.get("id_token") or token_info.get("id_token")
         if id_token and "." in id_token:
             parts = id_token.split(".")
             if len(parts) >= 2:
@@ -110,6 +108,7 @@ class AccountsVault:
                 "history": []
             }
             self._save(initial_data)
+            self._auto_discover_existing_accounts()
         else:
             self.refresh_cooldowns()
 

@@ -2,6 +2,7 @@ import time
 from typing import Dict, Any, Optional
 from .wincred import read_credential, write_credential
 from .vault import AccountsVault
+from .quota_checker import get_all_accounts_quota_map
 
 TARGET_CREDENTIAL = "gemini:antigravity"
 
@@ -10,7 +11,7 @@ class AccountSwitcher:
         self.vault = vault or AccountsVault()
 
     def get_status(self) -> Dict[str, Any]:
-        """Retorna o estado geral atual do sistema de Hot-Swap."""
+        """Retorna o estado geral atual do sistema de Hot-Swap com cotas em tempo real."""
         self.vault.refresh_cooldowns()
         accounts = self.vault.list_accounts()
         active = self.vault.get_active_account()
@@ -19,13 +20,20 @@ class AccountSwitcher:
         # Checar se a credencial no Windows bate com a conta ativa no cofre
         wincred_synced = False
         if current_win and active:
-            wincred_synced = (current_win.get("blob") == active.get("blob"))
+            from .vault import _extract_email_from_blob
+            extracted_email = _extract_email_from_blob(current_win.get("blob", ""))
+            wincred_synced = (bool(extracted_email) and extracted_email.lower() == active.get("email", "").lower())
+
+        # Calcula cotas em tempo real para todas as contas
+        active_id = active.get("id") if active else None
+        quotas_map = get_all_accounts_quota_map(accounts, active_id)
 
         return {
             "active_account": active,
             "wincred_synced": wincred_synced,
             "total_accounts": len(accounts),
             "accounts": accounts,
+            "quotas": quotas_map,
             "now": time.time()
         }
 

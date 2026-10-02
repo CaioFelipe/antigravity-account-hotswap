@@ -3,16 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Central de Hot-Swap de Contas - Antigravity</title>
+  <title>Antigravity Hot-Swap de Contas</title>
   <style>
     :root {
-      --bg-main: #0c0f17;
-      --bg-card: #151926;
-      --bg-card-hover: #1b2133;
-      --border-color: #262e45;
-      --border-active: #3b82f6;
-      --text-main: #f1f5f9;
-      --text-muted: #94a3b8;
+      --bg-page: #0a0d14;
+      --bg-surface: #121722;
+      --bg-card: #182030;
+      --bg-card-hover: #1e283d;
+      --border-color: #27334d;
+      --border-focus: #3b82f6;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
       --accent-blue: #3b82f6;
       --accent-blue-hover: #2563eb;
       --accent-green: #10b981;
@@ -29,23 +31,25 @@
     }
 
     body {
-      background-color: var(--bg-main);
-      color: var(--text-main);
+      background-color: var(--bg-page);
+      color: var(--text-primary);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
     }
 
+    /* Top Navigation */
     header {
-      background-color: var(--bg-card);
+      background-color: var(--bg-surface);
       border-bottom: 1px solid var(--border-color);
-      padding: 16px 32px;
+      padding: 14px 28px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
-      z-index: 50;
+      z-index: 40;
     }
 
     .brand {
@@ -54,175 +58,193 @@
       gap: 12px;
     }
 
-    .brand-logo {
-      width: 32px;
-      height: 32px;
+    .brand-icon {
+      width: 36px;
+      height: 36px;
       background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      border-radius: 8px;
+      border-radius: 9px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: bold;
+      font-weight: 800;
+      font-size: 1.05rem;
       color: white;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
 
-    .brand-title {
+    .brand-name {
       font-size: 1.15rem;
       font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-
-    .brand-subtitle {
-      font-size: 0.8rem;
-      color: var(--text-muted);
+      letter-spacing: -0.02em;
     }
 
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
-      font-size: 0.85rem;
+      font-size: 0.86rem;
       font-weight: 600;
       padding: 8px 16px;
-      border-radius: 6px;
+      border-radius: 8px;
       border: 1px solid transparent;
       cursor: pointer;
-      transition: all 0.15s ease-in-out;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     .btn-primary {
       background-color: var(--accent-blue);
       color: #fff;
     }
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
       background-color: var(--accent-blue-hover);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
     }
 
     .btn-secondary {
-      background-color: #1e2638;
+      background-color: #1a2233;
       border-color: var(--border-color);
-      color: var(--text-main);
+      color: var(--text-primary);
     }
-    .btn-secondary:hover {
-      background-color: #273147;
-      border-color: #3b4866;
-    }
-
-    .btn-warning {
-      background-color: rgba(245, 158, 11, 0.15);
-      border-color: rgba(245, 158, 11, 0.4);
-      color: #fbbf24;
-    }
-    .btn-warning:hover {
-      background-color: rgba(245, 158, 11, 0.25);
+    .btn-secondary:hover:not(:disabled) {
+      background-color: #242f47;
+      border-color: #3b4b6e;
     }
 
-    .btn-danger {
-      background-color: rgba(239, 68, 68, 0.15);
-      border-color: rgba(239, 68, 68, 0.4);
-      color: #f87171;
-    }
-    .btn-danger:hover {
-      background-color: rgba(239, 68, 68, 0.25);
-    }
-
-    .btn-success {
-      background-color: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.4);
-      color: #34d399;
-    }
-    .btn-success:hover {
-      background-color: rgba(16, 185, 129, 0.25);
-    }
-
-    .btn-purple {
+    .btn-reload {
       background-color: rgba(139, 92, 246, 0.15);
       border-color: rgba(139, 92, 246, 0.4);
       color: #c084fc;
     }
-    .btn-purple:hover {
+    .btn-reload:hover:not(:disabled) {
       background-color: rgba(139, 92, 246, 0.25);
     }
 
-    .btn-sm {
-      padding: 5px 10px;
-      font-size: 0.78rem;
-    }
-
-    main {
-      flex: 1;
-      max-width: 1200px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-
-    /* Status Bar */
-    .overview-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 16px;
-    }
-
-    .overview-card {
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .overview-label {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+    .btn-delete {
+      background: transparent;
+      border: none;
       color: var(--text-muted);
-    }
-
-    .overview-value {
-      font-size: 1.4rem;
-      font-weight: 700;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      transition: color 0.15s ease, background-color 0.15s ease;
+    }
+    .btn-delete:hover {
+      color: var(--accent-red);
+      background-color: rgba(239, 68, 68, 0.12);
     }
 
-    .overview-desc {
-      font-size: 0.8rem;
-      color: var(--text-muted);
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
     }
 
-    /* Section */
-    .section-header {
+    /* Active Banner */
+    .active-banner {
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      padding: 16px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 14px;
     }
 
-    .section-title {
-      font-size: 1.15rem;
+    .active-banner-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      background-color: var(--accent-green);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    .active-banner-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .active-title {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #93c5fd;
       font-weight: 700;
     }
 
-    /* Accounts Grid */
-    .accounts-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-      gap: 16px;
+    .active-account-name {
+      font-size: 1.05rem;
+      font-weight: 700;
     }
 
+    .active-account-email {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+
+    /* Accounts Grid */
+    .grid-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .grid-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .grid-count {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .accounts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 18px;
+    }
+
+    /* Card */
     .account-card {
       background-color: var(--bg-card);
       border: 1px solid var(--border-color);
@@ -232,167 +254,180 @@
       flex-direction: column;
       justify-content: space-between;
       gap: 16px;
-      transition: all 0.2s ease;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       position: relative;
+    }
+
+    .account-card:hover {
+      border-color: #3b4b6e;
     }
 
     .account-card.is-active {
       border-color: var(--accent-blue);
       background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, var(--bg-card) 100%);
-      box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+      box-shadow: 0 0 24px rgba(59, 130, 246, 0.15);
     }
 
-    .account-header {
+    .card-top {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 12px;
+      gap: 10px;
     }
 
-    .account-title-group {
+    .card-info {
+      flex: 1;
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
 
-    .account-name {
+    .card-name {
       font-size: 1.05rem;
       font-weight: 700;
+      color: var(--text-primary);
     }
 
-    .account-email {
-      font-size: 0.85rem;
-      color: var(--text-muted);
+    .card-email {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
       word-break: break-all;
-    }
-
-    .account-schedule-tag {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 4px;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    .account-schedule-tag:hover {
-      color: #60a5fa;
     }
 
     .status-badge {
       font-size: 0.72rem;
       font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 20px;
+      padding: 3px 8px;
+      border-radius: 6px;
       text-transform: uppercase;
       letter-spacing: 0.04em;
       white-space: nowrap;
     }
 
-    .status-active {
-      background-color: rgba(59, 130, 246, 0.2);
+    .badge-active {
+      background-color: rgba(59, 130, 246, 0.18);
       color: #60a5fa;
       border: 1px solid rgba(59, 130, 246, 0.4);
     }
 
-    .status-ready {
-      background-color: rgba(16, 185, 129, 0.2);
+    .badge-ready {
+      background-color: rgba(16, 185, 129, 0.15);
       color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.4);
+      border: 1px solid rgba(16, 185, 129, 0.35);
     }
 
-    .status-cooldown-5h {
-      background-color: rgba(245, 158, 11, 0.2);
+    .badge-cooldown {
+      background-color: rgba(245, 158, 11, 0.18);
       color: #fbbf24;
       border: 1px solid rgba(245, 158, 11, 0.4);
     }
 
-    .status-cooldown-weekly {
-      background-color: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.4);
-    }
-
-    .cooldown-timer-box {
-      background-color: rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--border-color);
+    /* Quota Section */
+    .quota-box {
+      background-color: rgba(10, 13, 20, 0.6);
+      border: 1px solid rgba(39, 51, 77, 0.6);
       border-radius: 8px;
       padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .timer-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .timer-label {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-
-    .timer-val {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: #fcd34d;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .timer-sub {
-      font-size: 0.74rem;
-      color: #94a3b8;
-    }
-
-    .card-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-
-    /* History Log */
-    .history-card {
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-      max-height: 280px;
-      overflow-y: auto;
-    }
-
-    .history-list {
       display: flex;
       flex-direction: column;
       gap: 10px;
     }
 
-    .history-item {
+    .quota-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .quota-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+    }
+
+    .quota-label {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .quota-value {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .progress-bar-bg {
+      height: 6px;
+      background-color: #242f47;
+      border-radius: 3px;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-green {
+      background: linear-gradient(90deg, #10b981, #34d399);
+    }
+
+    .progress-yellow {
+      background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    }
+
+    .progress-red {
+      background: linear-gradient(90deg, #ef4444, #f87171);
+    }
+
+    /* Models mini tags */
+    .model-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .model-tag {
+      font-size: 0.72rem;
+      background-color: rgba(255, 255, 255, 0.05);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--text-secondary);
+    }
+
+    /* Card Actions */
+    .card-actions {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      font-size: 0.85rem;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      gap: 8px;
+      margin-top: 4px;
     }
 
-    .history-msg {
+    .btn-switch {
       flex: 1;
-      color: var(--text-main);
+      background-color: var(--accent-blue);
+      color: white;
+      padding: 9px 12px;
+      font-size: 0.88rem;
+    }
+    .btn-switch:hover {
+      background-color: var(--accent-blue-hover);
     }
 
-    .history-time {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      white-space: nowrap;
+    .btn-active-state {
+      flex: 1;
+      background-color: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+      padding: 9px 12px;
+      font-size: 0.84rem;
+      cursor: default;
     }
 
-    /* Modals */
+    /* Modal */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -405,15 +440,22 @@
     }
 
     .modal-card {
-      background-color: var(--bg-card);
+      background-color: var(--bg-surface);
       border: 1px solid var(--border-color);
-      border-radius: 12px;
+      border-radius: 14px;
       width: 100%;
-      max-width: 520px;
-      padding: 24px;
+      max-width: 480px;
+      padding: 26px;
       display: flex;
       flex-direction: column;
       gap: 18px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     .modal-title {
@@ -428,49 +470,54 @@
     }
 
     .form-label {
-      font-size: 0.85rem;
-      color: var(--text-muted);
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      font-weight: 500;
     }
 
-    .form-input, .form-select {
-      background-color: #0c0f17;
+    .form-input {
+      background-color: var(--bg-page);
       border: 1px solid var(--border-color);
-      color: var(--text-main);
+      color: var(--text-primary);
       padding: 10px 14px;
-      border-radius: 6px;
-      font-size: 0.9rem;
+      border-radius: 8px;
+      font-size: 0.92rem;
       outline: none;
+      transition: border-color 0.15s ease;
     }
-    .form-input:focus, .form-select:focus {
-      border-color: var(--accent-blue);
-    }
-
-    .quick-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 4px;
+    .form-input:focus {
+      border-color: var(--border-focus);
     }
 
-    .chip-btn {
-      background-color: #1e2638;
+    .enroll-step {
+      background-color: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border-color);
-      color: var(--text-main);
-      font-size: 0.78rem;
-      padding: 4px 10px;
-      border-radius: 14px;
-      cursor: pointer;
-    }
-    .chip-btn:hover {
-      background-color: #2b364e;
-      border-color: #3b82f6;
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
-    .modal-actions {
+    .enroll-step-title {
+      font-size: 0.86rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .enroll-step-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .modal-footer {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      margin-top: 10px;
+      margin-top: 6px;
     }
 
     /* Toast */
@@ -478,218 +525,129 @@
       position: fixed;
       bottom: 24px;
       right: 24px;
-      background-color: #1e293b;
+      background-color: #1e283d;
       border: 1px solid var(--border-color);
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 0.88rem;
-      color: var(--text-main);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       display: none;
       z-index: 150;
-      transition: all 0.2s ease;
+      max-width: 420px;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
 
+  <!-- Header -->
   <header>
     <div class="brand">
-      <div class="brand-logo">AG</div>
+      <div class="brand-icon">AG</div>
       <div>
-        <div class="brand-title">Antigravity Account Hot-Swap</div>
-        <div class="brand-subtitle">Gerenciador de Múltiplas Contas Google & Proteção de Cotas</div>
+        <div class="brand-name">Antigravity Hot-Swap</div>
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn btn-purple" onclick="acionarAutoDetect()" title="Verifica automaticamente arquivos de telemetria e rate-limits reais do Google">
-        🤖 Auto-Detectar Cotas Google
-      </button>
-      <button class="btn btn-warning" onclick="abrirModalColarErro()" title="Cole uma mensagem de erro e deixe o sistema extrair a data/hora sozinho">
-        📋 Analisar Erro da IDE/CLI
-      </button>
-      <button class="btn btn-secondary" onclick="capturarContaAtiva()">
-        📥 Capturar Conta do Windows
+      <button class="btn btn-reload" onclick="recarregarIde()" title="Aplica a conta ativa diretamente na janela do Antigravity IDE">
+        🔄 Recarregar Janela do Antigravity
       </button>
       <button class="btn btn-primary" onclick="abrirModalNovaConta()">
-        ➕ Cadastrar Nova Conta Google
+        ➕ Adicionar Nova Conta
       </button>
     </div>
   </header>
 
   <main>
-    <!-- Overview Metrics -->
-    <div class="overview-grid">
-      <div class="overview-card">
-        <span class="overview-label">Conta Ativa no Antigravity</span>
-        <div class="overview-value" id="valActiveAccount">Carregando...</div>
-        <span class="overview-desc" id="valActiveEmail">-</span>
+    <!-- Top Active Account Banner -->
+    <div class="active-banner" id="activeBanner">
+      <div class="active-banner-info">
+        <div class="pulse-dot"></div>
+        <div class="active-banner-text">
+          <span class="active-title">Conta em Uso no Antigravity</span>
+          <span class="active-account-name" id="valActiveName">Carregando...</span>
+          <span class="active-account-email" id="valActiveEmail">-</span>
+        </div>
       </div>
-
-      <div class="overview-card">
-        <span class="overview-label">Sincronização com Cofre</span>
-        <div class="overview-value" id="valWincredStatus">🟢 Conectado</div>
-        <span class="overview-desc">Windows Credential Manager (gemini:antigravity)</span>
-      </div>
-
-      <div class="overview-card">
-        <span class="overview-label">Pool de Contas Disponíveis</span>
-        <div class="overview-value" id="valPoolStatus">0 Contas</div>
-        <span class="overview-desc" id="valPoolDesc">0 prontas para substituição</span>
+      <div>
+        <button class="btn btn-secondary btn-sm" onclick="capturarContaWindows()" title="Importa a credencial atual salva no Windows se ainda não estiver na lista">
+          📥 Sincronizar Credencial do Windows
+        </button>
       </div>
     </div>
 
-    <!-- Accounts List Section -->
+    <!-- Accounts Grid -->
     <section>
-      <div class="section-header">
-        <h2 class="section-title">Contas Registradas</h2>
-        <button class="btn btn-warning btn-sm" onclick="acionarAutoSwap()">
-          ⚡ Forçar Hot-Swap Automático (Próxima Saudável)
-        </button>
+      <div class="grid-header" style="margin-bottom: 14px;">
+        <h2 class="grid-title">Suas Contas Google</h2>
+        <span class="grid-count" id="valAccountsCount">0 contas cadastradas</span>
       </div>
 
       <div class="accounts-grid" id="accountsGrid">
         <!-- Rendered via JS -->
       </div>
     </section>
-
-    <!-- History Log Section -->
-    <section>
-      <div class="section-header">
-        <h2 class="section-title">Histórico de Trocas & Eventos</h2>
-      </div>
-      <div class="history-card">
-        <div class="history-list" id="historyList">
-          <div class="history-item">Nenhum evento registrado ainda.</div>
-        </div>
-      </div>
-    </section>
   </main>
 
-  <!-- Modal Nova Conta -->
+  <!-- Modal Adicionar Conta -->
   <div class="modal-backdrop" id="modalNovaConta">
     <div class="modal-card">
-      <h3 class="modal-title">Cadastrar Nova Conta Google</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Ao confirmar, o assistente abrirá a tela oficial de login do Google no seu navegador para autenticar a nova conta. O token será capturado com segurança e guardado no cofre.
-      </p>
-      <div class="form-group">
-        <label class="form-label">Identificador / Nome da Conta</label>
-        <input type="text" id="inputNomeConta" class="form-input" placeholder="Ex: Conta Pessoal ou Conta Empresa">
+      <div class="modal-header">
+        <h3 class="modal-title">Adicionar Nova Conta Google</h3>
+        <button class="btn-delete" onclick="fecharModalNovaConta()" style="font-size: 1.2rem;">✕</button>
       </div>
-      <div class="form-group">
-        <label class="form-label">E-mail do Google (Opcional - detecta automático)</label>
-        <input type="email" id="inputEmailConta" class="form-input" placeholder="seu-email@gmail.com">
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="fecharModalNovaConta()">Cancelar</button>
-        <button class="btn btn-primary" onclick="confirmarCadastroConta()">Abrir Navegador & Conectar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Ajustar Reset / Cooldown -->
-  <div class="modal-backdrop" id="modalAjustarReset">
-    <div class="modal-card">
-      <h3 class="modal-title">Ajustar Horário de Retorno da Conta</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;" id="descAjustarReset">
-        Ajuste a data e hora exatas em que o Google informou que esta cota será restaurada.
-      </p>
-      <input type="hidden" id="ajustarAccountId">
 
       <div class="form-group">
-        <label class="form-label">Atalhos Rápidos de Horário:</label>
-        <div class="quick-chips">
-          <button class="chip-btn" onclick="aplicarAtalhoMinutos(30)">+30 min</button>
-          <button class="chip-btn" onclick="aplicarAtalhoMinutos(60)">+1 hora</button>
-          <button class="chip-btn" onclick="aplicarAtalhoMinutos(120)">+2 horas</button>
-          <button class="chip-btn" onclick="aplicarAtalhoMinutos(300)">+5 horas</button>
-          <button class="chip-btn" onclick="aplicarAtalhoAmanha()">Amanhã 00:00</button>
-          <button class="chip-btn" onclick="aplicarAtalhoCicloSemanal()">Próximo Ciclo Semanal</button>
+        <label class="form-label">Identificador / Apelido da Conta</label>
+        <input type="text" id="inputNomeConta" class="form-input" placeholder="Ex: Conta Pessoal ou Secundária">
+      </div>
+
+      <!-- Passo 1: Abrir navegador -->
+      <div class="enroll-step">
+        <div class="enroll-step-title">
+          <span>Passo 1: Autenticação Google</span>
+        </div>
+        <p class="enroll-step-desc">
+          Clique no botão abaixo. Seu navegador será aberto automaticamente na página de login da Google para conceder acesso.
+        </p>
+        <button class="btn btn-primary" id="btnIniciarLogin" onclick="iniciarLoginGoogle()" style="width: 100%;">
+          🌐 Abrir Login no Navegador
+        </button>
+        <div id="enrollLinkManual" style="display: none; font-size: 0.78rem; word-break: break-all; margin-top: 4px;">
+          <a href="#" id="linkUrlGoogle" target="_blank" style="color: #60a5fa;">Ou clique aqui para abrir manualmente o link do Google</a>
         </div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Ou selecione Data e Hora Exatas:</label>
-        <input type="datetime-local" id="inputCustomDateTime" class="form-input">
+      <!-- Passo 2: Colar código -->
+      <div class="enroll-step" id="step2Box" style="opacity: 0.6; pointer-events: none;">
+        <div class="enroll-step-title">
+          <span>Passo 2: Confirmar Código</span>
+        </div>
+        <p class="enroll-step-desc">
+          Após fazer login, o Google exibirá um código de autorização (começando com <strong>4/0...</strong>). Copie e cole abaixo:
+        </p>
+        <input type="text" id="inputAuthCode" class="form-input" placeholder="Cole o código do Google aqui (4/0...)">
+        <button class="btn btn-secondary" id="btnConfirmarCodigo" onclick="submeterCodigoGoogle()" style="width: 100%;">
+          ✓ Conectar e Salvar Conta
+        </button>
       </div>
 
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="fecharModalAjustarReset()">Cancelar</button>
-        <button class="btn btn-primary" onclick="confirmarAjusteReset()">Salvar Novo Horário</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Configurar Ciclo Semanal -->
-  <div class="modal-backdrop" id="modalConfigSchedule">
-    <div class="modal-card">
-      <h3 class="modal-title">Configurar Ciclo de Renovação Semanal</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Informe em qual dia da semana e horário a assinatura ou cota semanal desta conta normalmente renova no Google. Assim, quando a cota semanal esgotar, o sistema calculará o tempo exato restante até este momento!
-      </p>
-      <input type="hidden" id="scheduleAccountId">
-
-      <div class="form-group">
-        <label class="form-label">Dia da Semana de Renovação</label>
-        <select id="selectScheduleDay" class="form-select">
-          <option value="0">Segunda-feira</option>
-          <option value="1">Terça-feira</option>
-          <option value="2">Quarta-feira</option>
-          <option value="3">Quinta-feira</option>
-          <option value="4">Sexta-feira</option>
-          <option value="5">Sábado</option>
-          <option value="6">Domingo</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Horário de Renovação (HH:MM)</label>
-        <input type="time" id="inputScheduleTime" class="form-input" value="00:00">
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="fecharModalSchedule()">Cancelar</button>
-        <button class="btn btn-primary" onclick="confirmarSalvarSchedule()">Salvar Configuração</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Marcar Cota Esgotada -->
-  <div class="modal-backdrop" id="modalMarcarCota">
-    <div class="modal-card">
-      <h3 class="modal-title" id="tituloMarcarCota">Registrar Cota Esgotada</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;" id="descMarcarCota">
-        Escolha como calcular o tempo até a cota ser restaurada antes de fazer o Hot-Swap.
-      </p>
-      <input type="hidden" id="marcarAccountId">
-      <input type="hidden" id="marcarQuotaType">
-
-      <div class="form-group" id="grupoOpcoesCota">
-        <!-- Renderizado dinamicamente -->
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="fecharModalMarcarCota()">Cancelar</button>
-        <button class="btn btn-warning" onclick="confirmarMarcarCota()">Confirmar & Trocar de Conta</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Analisar Erro / Auto-Detecção de Texto -->
-  <div class="modal-backdrop" id="modalColarErro">
-    <div class="modal-card">
-      <h3 class="modal-title">Auto-Identificação de Erro de Cota</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Cole abaixo a mensagem de erro que o Antigravity, o Gemini ou o terminal exibiu (ex: <em>"429 Resource has been exhausted... retryDelay: 14400s"</em>, <em>"quota resets at 15:30"</em> ou <em>"try again in 45 minutes"</em>). O sistema identificará automaticamente o tempo restante e fará o Hot-Swap na hora!
-      </p>
-      <div class="form-group">
-        <label class="form-label">Texto da Mensagem de Erro / Log</label>
-        <textarea id="inputTextoErro" class="form-input" rows="4" placeholder="Cole aqui o erro do terminal ou IDE..."></textarea>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="fecharModalColarErro()">Cancelar</button>
-        <button class="btn btn-purple" onclick="confirmarAnalisarErro()">🔍 Analisar & Auto-Swap</button>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="fecharModalNovaConta()">Fechar</button>
       </div>
     </div>
   </div>
@@ -697,91 +655,19 @@
   <div id="toast"></div>
 
   <script>
-    const WEEKDAY_NAMES = [
-      "Segunda-feira", "Terça-feira", "Quarta-feira",
-      "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"
-    ];
-
     let state = {
       accounts: [],
       active_account: null,
-      history: [],
-      now: Date.now() / 1000
+      quotas: {}
     };
+
+    let enrollPollInterval = null;
 
     function showToast(msg) {
       const toast = document.getElementById("toast");
       toast.innerText = msg;
       toast.style.display = "block";
       setTimeout(() => { toast.style.display = "none"; }, 4000);
-    }
-
-    async function acionarAutoDetect() {
-      showToast("Varrendo telemetria e limites de cota da Google...");
-      try {
-        const res = await fetch("/api/auto_detect", { method: "POST" });
-        const data = await res.json();
-        showToast(data.message);
-        fetchStatus();
-      } catch (e) {
-        showToast("Falha na auto-detecção.");
-      }
-    }
-
-    function abrirModalColarErro() {
-      document.getElementById("inputTextoErro").value = "";
-      document.getElementById("modalColarErro").style.display = "flex";
-    }
-
-    function fecharModalColarErro() {
-      document.getElementById("modalColarErro").style.display = "none";
-    }
-
-    async function confirmarAnalisarErro() {
-      const text = document.getElementById("inputTextoErro").value.trim();
-      if (!text) {
-        alert("Por favor, cole a mensagem de erro.");
-        return;
-      }
-      fecharModalColarErro();
-      showToast("Analisando padrões de reset...");
-      try {
-        const res = await fetch("/api/parse_error", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: text })
-        });
-        const data = await res.json();
-        showToast(data.message);
-        fetchStatus();
-      } catch (e) {
-        showToast("Erro ao processar mensagem.");
-      }
-    }
-
-    function formatTimeRemaining(cooldownUntil, now) {
-      const diff = Math.max(0, Math.floor(cooldownUntil - now));
-      if (diff <= 0) return "Pronto para reativação";
-      const days = Math.floor(diff / 86400);
-      const hours = Math.floor((diff % 86400) / 3600);
-      const minutes = Math.floor((diff % 3600) / 60);
-      const seconds = diff % 60;
-
-      if (days > 0) {
-        return `${days}d ${hours}h ${minutes}m restantes`;
-      }
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s restantes`;
-    }
-
-    function formatDateTimeLocal(date) {
-      const pad = (n) => String(n).padStart(2, '0');
-      const y = date.getFullYear();
-      const m = pad(date.getMonth() + 1);
-      const d = pad(date.getDate());
-      const hh = pad(date.getHours());
-      const mm = pad(date.getMinutes());
-      return `${y}-${m}-${d}T${hh}:${mm}`;
     }
 
     async function fetchStatus() {
@@ -791,465 +677,304 @@
         state = await res.json();
         renderDashboard();
       } catch (err) {
-        console.error("Erro ao atualizar status:", err);
+        console.error("Erro ao buscar status:", err);
       }
     }
 
     function renderDashboard() {
       const active = state.active_account;
-      document.getElementById("valActiveAccount").innerText = active ? active.name : "Nenhuma Ativa";
-      document.getElementById("valActiveEmail").innerText = active ? active.email : "Configure ou ative uma conta abaixo";
-
-      const readyCount = state.accounts.filter(a => a.status === "READY" || (a.status === "ACTIVE" && !a.cooldown_until)).length;
-      document.getElementById("valPoolStatus").innerText = `${state.accounts.length} Contas`;
-      document.getElementById("valPoolDesc").innerText = `${readyCount} saudável(is) fora de cooldown`;
+      document.getElementById("valActiveName").innerText = active ? active.name : "Nenhuma Conta Conectada";
+      document.getElementById("valActiveEmail").innerText = active ? active.email : "Adicione uma conta abaixo para começar";
+      document.getElementById("valAccountsCount").innerText = `${state.accounts.length} conta(s) registrada(s)`;
 
       const grid = document.getElementById("accountsGrid");
       grid.innerHTML = "";
 
       if (state.accounts.length === 0) {
-        grid.innerHTML = `<div style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--text-muted); background: var(--bg-card); border-radius: 12px; border: 1px dashed var(--border-color);">
-          Nenhuma conta cadastrada ainda. Clique em <strong>"Capturar Conta do Windows"</strong> para registrar a conta que já está logada no Antigravity!
-        </div>`;
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; padding: 36px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border-radius: 12px; border: 1px dashed var(--border-color);">
+            Nenhuma conta cadastrada ainda. Clique em <strong>"Adicionar Nova Conta"</strong> ou <strong>"Sincronizar Credencial do Windows"</strong>.
+          </div>
+        `;
+        return;
       }
 
       state.accounts.forEach(acc => {
-        const isActive = acc.id === (active ? active.id : null);
+        const isActive = active && acc.id === active.id;
+        const quotaData = (state.quotas && state.quotas[acc.id]) ? state.quotas[acc.id] : null;
+
         const card = document.createElement("div");
         card.className = `account-card ${isActive ? 'is-active' : ''}`;
 
-        let badgeClass = "status-ready";
-        let badgeText = "Pronta";
+        // Quotas
+        const q5h = quotaData ? quotaData.quota_5h : { percent_remaining: 100, badge: "100% Livre" };
+        const qWeekly = quotaData ? quotaData.quota_weekly : { percent_remaining: 100, badge: "100% Disponível" };
 
-        if (isActive) {
-          badgeClass = "status-active";
-          badgeText = "Ativa no Antigravity";
-        } else if (acc.status === "COOLDOWN_5H") {
-          badgeClass = "status-cooldown-5h";
-          badgeText = "Pausa 5 Horas";
-        } else if (acc.status === "COOLDOWN_WEEKLY") {
-          badgeClass = "status-cooldown-weekly";
-          badgeText = "Pausa Semanal";
-        }
+        let q5hColorClass = "progress-green";
+        if (q5h.percent_remaining < 30) q5hColorClass = "progress-red";
+        else if (q5h.percent_remaining < 60) q5hColorClass = "progress-yellow";
 
-        const weekday = acc.weekly_reset_day !== undefined ? acc.weekly_reset_day : 0;
-        const resetTime = acc.weekly_reset_time || "00:00";
-        const weekdayName = WEEKDAY_NAMES[weekday] || "Segunda-feira";
+        let qWeeklyColorClass = "progress-green";
+        if (qWeekly.percent_remaining < 30) qWeeklyColorClass = "progress-red";
 
-        let cooldownBoxHtml = "";
-        if (acc.cooldown_until) {
-          const remainingText = formatTimeRemaining(acc.cooldown_until, state.now);
-          const reasonText = acc.cooldown_reason || "Cota em renovação";
-          cooldownBoxHtml = `
-            <div class="cooldown-timer-box">
-              <div class="timer-top">
-                <span class="timer-label">⏰ Volta em:</span>
-                <span class="timer-val">${remainingText}</span>
-              </div>
-              <span class="timer-sub">${reasonText}</span>
-              <div style="margin-top: 6px;">
-                <button class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center; font-size: 0.76rem;" onclick="abrirModalAjustarReset('${acc.id}')">
-                  ✏️ Ajustar Horário Exato do Reset
-                </button>
-              </div>
+        // Model tags
+        let modelsHtml = "";
+        if (quotaData && quotaData.models && quotaData.models.length > 0) {
+          modelsHtml = `
+            <div class="model-tags">
+              ${quotaData.models.map(m => `
+                <span class="model-tag" title="Reseta em ${m.reset_in}">${m.model.replace(' (High)', '').replace(' (Low)', '')}: ${m.remaining_percent}%</span>
+              `).join('')}
             </div>
           `;
         }
 
         card.innerHTML = `
           <div>
-            <div class="account-header">
-              <div class="account-title-group">
-                <span class="account-name">${acc.name}</span>
-                <span class="account-email">${acc.email}</span>
-                <span class="account-schedule-tag" onclick="abrirModalSchedule('${acc.id}')" title="Clique para alterar o dia/hora em que esta conta renova semanalmente">
-                  ⚙️ Ciclo semanal: Toda ${weekdayName} às ${resetTime}
-                </span>
+            <div class="card-top">
+              <div class="card-info">
+                <span class="card-name">${acc.name}</span>
+                <span class="card-email">${acc.email}</span>
               </div>
-              <span class="status-badge ${badgeClass}">${badgeText}</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                ${isActive ? `
+                  <span class="status-badge badge-active">● Em Uso</span>
+                ` : `
+                  <span class="status-badge badge-ready">Disponível</span>
+                `}
+                <button class="btn-delete" onclick="excluirConta('${acc.id}', '${acc.name}')" title="Remover conta do cofre">
+                  ✕
+                </button>
+              </div>
             </div>
-            ${cooldownBoxHtml}
+
+            <div class="quota-box" style="margin-top: 14px;">
+              <!-- 5h Quota -->
+              <div class="quota-item">
+                <div class="quota-item-header">
+                  <span class="quota-label">⏱️ Janela de 5 Horas</span>
+                  <span class="quota-value">${q5h.badge}</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill ${q5hColorClass}" style="width: ${q5h.percent_remaining}%;"></div>
+                </div>
+              </div>
+
+              <!-- Weekly Quota -->
+              <div class="quota-item">
+                <div class="quota-item-header">
+                  <span class="quota-label">📅 Cota Semanal</span>
+                  <span class="quota-value">${qWeekly.badge}</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill ${qWeeklyColorClass}" style="width: ${qWeekly.percent_remaining}%;"></div>
+                </div>
+              </div>
+
+              ${modelsHtml}
+            </div>
           </div>
 
           <div class="card-actions">
-            ${!isActive ? `
-              <button class="btn btn-primary btn-sm" onclick="fazerHotSwap('${acc.id}')">
-                🔄 Ativar Agora (Hot-Swap)
-              </button>
+            ${isActive ? `
+              <div class="btn btn-active-state">
+                ● Ativa no Antigravity
+              </div>
             ` : `
-              <span style="font-size: 0.78rem; color: #60a5fa; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
-                ● Ativa no Windows Credential Manager
-              </span>
-            `}
-
-            <button class="btn btn-warning btn-sm" title="Marcar cota de 5 horas e rotacionar" onclick="abrirModalMarcarCota('${acc.id}', '5h')">
-              ⏱️ Cota 5h
-            </button>
-
-            <button class="btn btn-danger btn-sm" title="Marcar cota semanal e rotacionar" onclick="abrirModalMarcarCota('${acc.id}', 'weekly')">
-              📅 Semanal
-            </button>
-
-            ${acc.cooldown_until ? `
-              <button class="btn btn-success btn-sm" onclick="resetarCooldown('${acc.id}')">
-                ✓ Liberar Cota
+              <button class="btn btn-switch" onclick="fazerHotSwap('${acc.id}', '${acc.name}')">
+                ⚡ Usar Esta Conta
               </button>
-            ` : ''}
-
-            <button class="btn btn-secondary btn-sm" style="margin-left: auto;" onclick="excluirConta('${acc.id}')" title="Excluir Conta">
-              ✕
-            </button>
+            `}
           </div>
         `;
+
         grid.appendChild(card);
       });
-
-      const historyList = document.getElementById("historyList");
-      if (state.history && state.history.length > 0) {
-        historyList.innerHTML = state.history.map(item => `
-          <div class="history-item">
-            <span class="history-msg">${item.message}</span>
-            <span class="history-time">${item.time_str || ''}</span>
-          </div>
-        `).join("");
-      } else {
-        historyList.innerHTML = `<div class="history-item">Nenhum evento registrado ainda.</div>`;
-      }
     }
 
-    // Ações de Hot-Swap
-    async function fazerHotSwap(accountId) {
-      const res = await fetch("/api/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id: accountId })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fetchStatus();
-    }
-
-    async function acionarAutoSwap() {
-      const res = await fetch("/api/report_exhaustion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quota_type: "5h" })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fetchStatus();
-    }
-
-    async function resetarCooldown(accountId) {
-      const res = await fetch("/api/reset_cooldown", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id: accountId })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fetchStatus();
-    }
-
-    // Modal Ajustar Reset
-    function abrirModalAjustarReset(accountId) {
-      const acc = state.accounts.find(a => a.id === accountId);
-      if (!acc) return;
-      document.getElementById("ajustarAccountId").value = accountId;
-      document.getElementById("descAjustarReset").innerText = `Defina quando a conta "${acc.name}" deve voltar a ficar disponível:`;
-
-      if (acc.cooldown_until) {
-        const dt = new Date(acc.cooldown_until * 1000);
-        document.getElementById("inputCustomDateTime").value = formatDateTimeLocal(dt);
-      } else {
-        const now = new Date();
-        now.setHours(now.getHours() + 1);
-        document.getElementById("inputCustomDateTime").value = formatDateTimeLocal(now);
-      }
-
-      document.getElementById("modalAjustarReset").style.display = "flex";
-    }
-
-    function fecharModalAjustarReset() {
-      document.getElementById("modalAjustarReset").style.display = "none";
-    }
-
-    function aplicarAtalhoMinutos(minutos) {
-      const d = new Date();
-      d.setMinutes(d.getMinutes() + minutos);
-      document.getElementById("inputCustomDateTime").value = formatDateTimeLocal(d);
-    }
-
-    function aplicarAtalhoAmanha() {
-      const d = new Date();
-      d.setDate(d.getDate() + 1);
-      d.setHours(0, 0, 0, 0);
-      document.getElementById("inputCustomDateTime").value = formatDateTimeLocal(d);
-    }
-
-    function aplicarAtalhoCicloSemanal() {
-      const accountId = document.getElementById("ajustarAccountId").value;
-      const acc = state.accounts.find(a => a.id === accountId);
-      const weekday = (acc && acc.weekly_reset_day !== undefined) ? acc.weekly_reset_day : 0;
-      const [h, m] = (acc && acc.weekly_reset_time ? acc.weekly_reset_time.split(":") : [0, 0]);
-
-      const now = new Date();
-      const target = new Date(now);
-      target.setHours(parseInt(h), parseInt(m), 0, 0);
-
-      let daysAhead = weekday - now.getDay();
-      // Ajuste: JavaScript domingo é 0, nossa convenção é 0=Segunda ... 6=Domingo
-      const jsToOur = (now.getDay() + 6) % 7;
-      daysAhead = weekday - jsToOur;
-      if (daysAhead < 0 || (daysAhead === 0 && now >= target)) {
-        daysAhead += 7;
-      }
-      target.setDate(now.getDate() + daysAhead);
-      document.getElementById("inputCustomDateTime").value = formatDateTimeLocal(target);
-    }
-
-    async function confirmarAjusteReset() {
-      const accountId = document.getElementById("ajustarAccountId").value;
-      const customDt = document.getElementById("inputCustomDateTime").value;
-      if (!customDt) {
-        alert("Por favor, selecione uma data e horário válidos.");
-        return;
-      }
-      const res = await fetch("/api/accounts/adjust_cooldown", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id: accountId, new_until: customDt })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fecharModalAjustarReset();
-      fetchStatus();
-    }
-
-    // Modal Configurar Ciclo Semanal
-    function abrirModalSchedule(accountId) {
-      const acc = state.accounts.find(a => a.id === accountId);
-      if (!acc) return;
-      document.getElementById("scheduleAccountId").value = accountId;
-      document.getElementById("selectScheduleDay").value = acc.weekly_reset_day !== undefined ? acc.weekly_reset_day : 0;
-      document.getElementById("inputScheduleTime").value = acc.weekly_reset_time || "00:00";
-      document.getElementById("modalConfigSchedule").style.display = "flex";
-    }
-
-    function fecharModalSchedule() {
-      document.getElementById("modalConfigSchedule").style.display = "none";
-    }
-
-    async function confirmarSalvarSchedule() {
-      const accountId = document.getElementById("scheduleAccountId").value;
-      const day = document.getElementById("selectScheduleDay").value;
-      const time = document.getElementById("inputScheduleTime").value;
-
-      const res = await fetch("/api/accounts/set_schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id: accountId, weekly_reset_day: day, weekly_reset_time: time })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fecharModalSchedule();
-      fetchStatus();
-    }
-
-    // Modal Marcar Cota Esgotada
-    function abrirModalMarcarCota(accountId, quotaType) {
-      const acc = state.accounts.find(a => a.id === accountId);
-      if (!acc) return;
-      document.getElementById("marcarAccountId").value = accountId;
-      document.getElementById("marcarQuotaType").value = quotaType;
-
-      const titulo = quotaType === "weekly" ? "Registrar Cota Semanal Esgotada" : "Registrar Cota de 5 Horas Esgotada";
-      document.getElementById("tituloMarcarCota").innerText = titulo;
-
-      const grupo = document.getElementById("grupoOpcoesCota");
-      const weekday = acc.weekly_reset_day !== undefined ? acc.weekly_reset_day : 0;
-      const weekdayName = WEEKDAY_NAMES[weekday] || "Segunda-feira";
-      const resetTime = acc.weekly_reset_time || "00:00";
-
-      if (quotaType === "weekly") {
-        grupo.innerHTML = `
-          <label class="form-label">Como deseja definir o reset semanal?</label>
-          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem;">
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
-              <input type="radio" name="opcaoReset" value="ciclo" checked style="margin-top: 3px;">
-              <div>
-                <strong>Próximo ciclo semanal configurado:</strong><br>
-                <span style="color: #94a3b8; font-size: 0.8rem;">Calcula exatamente até a próxima ${weekdayName} às ${resetTime}.</span>
-              </div>
-            </label>
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
-              <input type="radio" name="opcaoReset" value="custom" style="margin-top: 3px;">
-              <div>
-                <strong>Definir data/hora exatas informadas pelo Google:</strong><br>
-                <input type="datetime-local" id="inputMarcarCustomDt" class="form-input" style="margin-top: 6px; width: 100%;">
-              </div>
-            </label>
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
-              <input type="radio" name="opcaoReset" value="7d" style="margin-top: 3px;">
-              <div>
-                <strong>7 dias corridos (Padrão genérico)</strong>
-              </div>
-            </label>
-          </div>
-        `;
-      } else {
-        grupo.innerHTML = `
-          <label class="form-label">Como deseja definir a pausa de 5 horas?</label>
-          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem;">
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
-              <input type="radio" name="opcaoReset" value="5h" checked style="margin-top: 3px;">
-              <div>
-                <strong>Janela padrão de 5 horas a partir de agora</strong>
-              </div>
-            </label>
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
-              <input type="radio" name="opcaoReset" value="custom_min" style="margin-top: 3px;">
-              <div>
-                <strong>Faltam menos minutos/horas (Informado no erro):</strong><br>
-                <div style="display: flex; gap: 8px; margin-top: 6px;">
-                  <input type="number" id="inputMarcarMinutos" class="form-input" placeholder="Minutos restantes (ex: 90)" style="flex: 1;">
-                </div>
-              </div>
-            </label>
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
-              <input type="radio" name="opcaoReset" value="custom_dt" style="margin-top: 3px;">
-              <div>
-                <strong>Data e hora exatas:</strong><br>
-                <input type="datetime-local" id="inputMarcarCustomDt5h" class="form-input" style="margin-top: 6px; width: 100%;">
-              </div>
-            </label>
-          </div>
-        `;
-      }
-
-      document.getElementById("modalMarcarCota").style.display = "flex";
-    }
-
-    function fecharModalMarcarCota() {
-      document.getElementById("modalMarcarCota").style.display = "none";
-    }
-
-    async function confirmarMarcarCota() {
-      const accountId = document.getElementById("marcarAccountId").value;
-      const quotaType = document.getElementById("marcarQuotaType").value;
-      const selected = document.querySelector('input[name="opcaoReset"]:checked').value;
-
-      const payload = {
-        account_id: accountId,
-        quota_type: quotaType
-      };
-
-      if (quotaType === "weekly") {
-        if (selected === "custom") {
-          const dt = document.getElementById("inputMarcarCustomDt").value;
-          if (!dt) {
-            alert("Selecione a data/hora exata.");
-            return;
-          }
-          payload.custom_until = dt;
-        } else if (selected === "7d") {
-          payload.custom_seconds = 7 * 24 * 3600;
+    // Ações de Troca
+    async function fazerHotSwap(accountId, accountName) {
+      showToast(`Alternando para '${accountName}'...`);
+      try {
+        const res = await fetch("/api/switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_id: accountId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`✅ ${data.message} Clique em "Recarregar Janela do Antigravity" para aplicar imediatamente.`);
+        } else {
+          showToast(`❌ ${data.message}`);
         }
-        // Se for "ciclo", o backend calcula automaticamente com calculate_next_weekly_reset!
-      } else {
-        if (selected === "custom_min") {
-          const min = document.getElementById("inputMarcarMinutos").value;
-          if (!min) {
-            alert("Informe a quantidade de minutos restantes.");
-            return;
-          }
-          payload.custom_minutes = parseInt(min);
-        } else if (selected === "custom_dt") {
-          const dt = document.getElementById("inputMarcarCustomDt5h").value;
-          if (!dt) {
-            alert("Selecione a data/hora.");
-            return;
-          }
-          payload.custom_until = dt;
-        }
+        fetchStatus();
+      } catch (e) {
+        showToast("Falha ao comunicar com o servidor.");
       }
+    }
 
-      fecharModalMarcarCota();
-      showToast("Marcando cota e procurando próxima conta saudável...");
+    async function recarregarIde() {
+      showToast("Enviando sinal de atualização para o Antigravity...");
+      try {
+        const res = await fetch("/api/reload_ide", { method: "POST" });
+        const data = await res.json();
+        showToast(data.message);
+      } catch (e) {
+        showToast("Falha ao recarregar IDE. Use Ctrl+Shift+P -> 'Developer: Reload Window'.");
+      }
+    }
 
-      const res = await fetch("/api/report_exhaustion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fetchStatus();
+    async function capturarContaWindows() {
+      const nome = prompt("Nome identificador para a conta atual do Windows (ex: Conta Principal):", "Conta Antigravity");
+      if (!nome) return;
+      try {
+        const res = await fetch("/api/accounts/capture_active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: nome })
+        });
+        const data = await res.json();
+        showToast(data.message);
+        fetchStatus();
+      } catch (e) {
+        showToast("Erro ao capturar credencial.");
+      }
+    }
+
+    async function excluirConta(accountId, name) {
+      if (!confirm(`Deseja realmente remover '${name}' do gerenciador?`)) return;
+      try {
+        const res = await fetch("/api/accounts/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_id: accountId })
+        });
+        const data = await res.json();
+        showToast(data.message);
+        fetchStatus();
+      } catch (e) {
+        showToast("Erro ao excluir conta.");
+      }
     }
 
     // Modal Nova Conta
     function abrirModalNovaConta() {
+      document.getElementById("inputNomeConta").value = "";
+      document.getElementById("inputAuthCode").value = "";
+      document.getElementById("btnIniciarLogin").innerHTML = "🌐 Abrir Login no Navegador";
+      document.getElementById("btnIniciarLogin").disabled = false;
+      document.getElementById("enrollLinkManual").style.display = "none";
+      const step2 = document.getElementById("step2Box");
+      step2.style.opacity = "0.6";
+      step2.style.pointerEvents = "none";
       document.getElementById("modalNovaConta").style.display = "flex";
     }
 
     function fecharModalNovaConta() {
       document.getElementById("modalNovaConta").style.display = "none";
+      if (enrollPollInterval) {
+        clearInterval(enrollPollInterval);
+        enrollPollInterval = null;
+      }
     }
 
-    async function confirmarCadastroConta() {
-      const name = document.getElementById("inputNomeConta").value.trim();
-      const email = document.getElementById("inputEmailConta").value.trim();
-      if (!name) {
-        alert("Por favor, informe um nome ou apelido para a conta.");
+    async function iniciarLoginGoogle() {
+      const name = document.getElementById("inputNomeConta").value.trim() || "Nova Conta Google";
+      const btn = document.getElementById("btnIniciarLogin");
+      btn.innerHTML = `<span class="spinner"></span> Aguardando Google...`;
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/accounts/enroll", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name })
+        });
+        const data = await res.json();
+        showToast("Iniciando login no Google...");
+
+        // Começa a sondar o status da autenticação
+        if (enrollPollInterval) clearInterval(enrollPollInterval);
+        enrollPollInterval = setInterval(verificarEnrollStatus, 1500);
+      } catch (e) {
+        btn.innerHTML = "🌐 Abrir Login no Navegador";
+        btn.disabled = false;
+        showToast("Erro ao iniciar login.");
+      }
+    }
+
+    async function verificarEnrollStatus() {
+      try {
+        const res = await fetch("/api/accounts/enroll_status");
+        if (!res.ok) return;
+        const st = await res.json();
+
+        if (st.state === "waiting_code") {
+          const step2 = document.getElementById("step2Box");
+          step2.style.opacity = "1";
+          step2.style.pointerEvents = "auto";
+          document.getElementById("btnConfirmarCodigo").className = "btn btn-primary";
+
+          if (st.auth_url) {
+            const link = document.getElementById("linkUrlGoogle");
+            link.href = st.auth_url;
+            document.getElementById("enrollLinkManual").style.display = "block";
+          }
+        } else if (st.state === "completed") {
+          clearInterval(enrollPollInterval);
+          enrollPollInterval = null;
+          showToast(`🎉 Conta ${st.account ? st.account.email : ''} conectada com sucesso!`);
+          fecharModalNovaConta();
+          fetchStatus();
+        } else if (st.state === "error") {
+          clearInterval(enrollPollInterval);
+          enrollPollInterval = null;
+          showToast(`❌ ${st.error_message || 'Erro durante a autenticação.'}`);
+          document.getElementById("btnIniciarLogin").innerHTML = "🌐 Tentar Novamente";
+          document.getElementById("btnIniciarLogin").disabled = false;
+        }
+      } catch (e) {
+        console.error("Erro ao verificar status de login:", e);
+      }
+    }
+
+    async function submeterCodigoGoogle() {
+      const code = document.getElementById("inputAuthCode").value.trim();
+      if (!code) {
+        alert("Por favor, cole o código gerado pelo Google.");
         return;
       }
-      fecharModalNovaConta();
-      showToast("Abrindo fluxo de autenticação do Google...");
-      const res = await fetch("/api/accounts/enroll", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      setTimeout(fetchStatus, 3000);
+
+      const btn = document.getElementById("btnConfirmarCodigo");
+      btn.innerHTML = `<span class="spinner"></span> Validando com Google...`;
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/accounts/submit_code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: code })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`🎉 ${data.message}`);
+          fecharModalNovaConta();
+          fetchStatus();
+        } else {
+          showToast(`❌ ${data.message}`);
+          btn.innerHTML = "✓ Conectar e Salvar Conta";
+          btn.disabled = false;
+        }
+      } catch (e) {
+        showToast("Erro ao enviar código.");
+        btn.innerHTML = "✓ Conectar e Salvar Conta";
+        btn.disabled = false;
+      }
     }
 
-    async function capturarContaAtiva() {
-      const nome = prompt("Digite um nome de identificação para a conta atual do Windows (ex: Conta Principal):", "Conta Antigravity Atual");
-      if (!nome) return;
-      const res = await fetch("/api/accounts/capture_active", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nome })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fetchStatus();
-    }
-
-    async function excluirConta(accountId) {
-      if (!confirm("Tem certeza que deseja remover esta conta do cofre de hotswap?")) return;
-      const res = await fetch("/api/accounts/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id: accountId })
-      });
-      const data = await res.json();
-      showToast(data.message);
-      fetchStatus();
-    }
-
-    // Inicialização
+    // Inicialização e polling a cada 5 segundos
     fetchStatus();
-    setInterval(fetchStatus, 2500);
-
-    // Relógio local para contadores suaves
-    setInterval(() => {
-      state.now += 1;
-      const timers = document.querySelectorAll(".timer-val");
-      // suavemente atualizado no re-render
-    }, 1000);
+    setInterval(fetchStatus, 5000);
   </script>
 </body>
 </html>
