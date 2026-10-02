@@ -1,0 +1,25 @@
+# ==============================================================================
+# SEGURANÇA E PRIVACIDADE MÁXIMA - NUNCA COMMITAR CREDENCIAIS
+# ==============================================================================
+data/accounts_vault.json
+accounts_vault.json
+*.json.secret
+*.token
+*.key
+*.credential
+.env
+.env.*
+*.lock
+
+# Python e Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+.pytest_cache/
+
+# Sistema Operacional
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
