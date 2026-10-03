@@ -175,7 +175,7 @@ def restart_language_server() -> bool:
     """
     try:
         from .quota_checker import _get_active_ls_info
-        info = _get_active_ls_info()
+        info = _get_active_ls_info(force_refresh=True)
         if not info:
             return False
 
@@ -276,9 +276,6 @@ def send_continue_to_antigravity(
         // Se uma conversa específica foi solicitada, validar que estamos nela
         if (targetId) {{
             if (!pathname.includes(targetId)) {{
-                if (savedUrl && !pathname.includes('/c/')) {{
-                    window.location.href = savedUrl;
-                }}
                 return {{ status: 'wrong_conversation', currentPath: pathname }};
             }}
         }} else {{
@@ -516,13 +513,13 @@ def wait_and_resume_after_restart(
                 print("[Hot-Swap Watchdog] Todos os processos antigos foram encerrados.")
                 break
 
-            # Se passaram mais de 4s e o processo antigo ainda está vivo, encerra forçadamente
-            if time.time() - start_t > 4.0:
+            # Se passaram mais de 10s e o processo antigo ainda está vivo, tenta terminate suave
+            if time.time() - start_t > 10.0:
                 for pid in still_alive:
                     try:
                         p = psutil.Process(pid)
-                        p.kill()
-                        print(f"[Hot-Swap Watchdog] Processo antigo {pid} finalizado forçadamente.")
+                        p.terminate()
+                        print(f"[Hot-Swap Watchdog] Processo antigo {pid} finalizado suavemente.")
                     except Exception:
                         pass
             time.sleep(0.3)
@@ -639,7 +636,7 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
 
     cmd = (
         f"Get-Process Antigravity, language_server -ErrorAction SilentlyContinue | Stop-Process -Force; "
-        f"Start-Sleep -Milliseconds 800; "
+        f"Start-Sleep -Milliseconds 2500; "
         f"Start-Process '{exe_path}'"
     )
 
@@ -695,17 +692,13 @@ def apply_hotswap_reload(auto_continue: bool = True, continue_delay: float = 0.0
     invalidate_ls_cache()
 
     ls_ok = restart_language_server()
-    win_res = None
-    if not ls_ok:
-        if old_pids:
-            for pid in old_pids:
-                try:
-                    psutil.Process(pid).kill()
-                    ls_ok = True
-                except Exception:
-                    pass
-        if not ls_ok:
-            win_res = reload_antigravity_window()
+    if not ls_ok and old_pids:
+        # Fallback se a chamada RPC falhar: encerra apenas o language_server antigo
+        for pid in old_pids:
+            try:
+                psutil.Process(pid).terminate()
+            except Exception:
+                pass
 
     return {
         "success": True,
