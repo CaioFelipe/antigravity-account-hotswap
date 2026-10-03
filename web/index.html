@@ -636,11 +636,12 @@
 
     let enrollPollInterval = null;
 
-    function showToast(msg) {
+    function showToast(msg, durationMs = 4000) {
       const toast = document.getElementById("toast");
       toast.innerText = msg;
       toast.style.display = "block";
-      setTimeout(() => { toast.style.display = "none"; }, 4000);
+      clearTimeout(toast._hideTimer);
+      toast._hideTimer = setTimeout(() => { toast.style.display = "none"; }, durationMs);
     }
 
     async function fetchStatus() {
@@ -869,7 +870,7 @@
           body: JSON.stringify({ name: nome })
         });
         const data = await res.json();
-        showToast(data.message);
+        showToast(data.message, data.was_duplicate ? 9000 : 4000);
         fetchStatus();
       } catch (e) {
         showToast("Erro ao sincronizar credencial.");

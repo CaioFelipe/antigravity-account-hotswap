@@ -263,7 +263,14 @@ class AccountSwitcher:
             }
 
     def capture_active_wincred(self, name: str = "", email: str = "") -> Dict[str, Any]:
-        """Captura a credencial que está atualmente ativa no Windows e a adiciona ao cofre."""
+        """
+        Captura a credencial que está atualmente ativa no Windows e a adiciona ao cofre.
+        Extrai o e-mail REAL a partir do token (JWT) sempre que possível, em vez de usar
+        um texto fixo — e detecta quando a credencial capturada é apenas a MESMA conta já
+        cadastrada (ex: o usuário clicou em sincronizar antes de concluir o login da nova
+        conta dentro do próprio Antigravity), avisando claramente em vez de criar um
+        cadastro duplicado e confuso.
+        """
         current_cred = read_credential(TARGET_CREDENTIAL)
         if not current_cred:
             return {
@@ -271,22 +278,44 @@ class AccountSwitcher:
                 "message": "Nenhuma credencial ativa encontrada em 'gemini:antigravity' no Windows."
             }
 
+        from .vault import _extract_email_from_blob
+        real_email = _extract_email_from_blob(current_cred.get("blob", ""))
+        final_email = email or real_email or "sem_email@google.com"
+
+        existing = None
+        for acc_item in self.vault.list_accounts():
+            if acc_item.get("email", "").lower() == final_email.lower():
+                existing = acc_item
+                break
+
         acc = self.vault.add_or_update_account(
-            name=name or "Conta Antigravity Capturada",
-            email=email or "ativa@google.com",
+            name=name or (existing.get("name") if existing else "Conta Antigravity Capturada"),
+            email=final_email,
             blob=current_cred.get("blob", ""),
             username=current_cred.get("username", "antigravity"),
+            account_id=existing.get("id") if existing else None,
             set_active=True
         )
 
+        was_duplicate = bool(existing)
         self.vault.log_history(
             event_type="ACCOUNT_CAPTURED",
-            message=f"Conta '{acc.get('name')}' ({acc.get('email')}) capturada do cofre do Windows.",
+            message=f"Conta '{acc.get('name')}' ({acc.get('email')}) {'re-sincronizada' if was_duplicate else 'capturada'} do cofre do Windows.",
             details={"account_id": acc.get("id")}
         )
 
+        if was_duplicate:
+            message = (
+                f"A credencial ativa no Windows ainda é de '{acc.get('name')}' ({acc.get('email')}) — "
+                f"nenhuma conta NOVA foi detectada. Faça o login com a OUTRA conta Google dentro do "
+                f"próprio Antigravity primeiro e só então clique em sincronizar novamente."
+            )
+        else:
+            message = f"Conta '{acc.get('name')}' ({acc.get('email')}) capturada e registrada com sucesso!"
+
         return {
             "success": True,
-            "message": f"Conta '{acc.get('name')}' capturada e registrada com sucesso!",
-            "account": acc
+            "message": message,
+            "account": acc,
+            "was_duplicate": was_duplicate
         }
