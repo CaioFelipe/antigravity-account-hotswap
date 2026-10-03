@@ -8,7 +8,8 @@ import threading
 import urllib.request
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+import psutil
 
 DEVTOOLS_PORT_FILE = Path(os.path.expanduser(r"~\AppData\Roaming\Antigravity\DevToolsActivePort"))
 ANTIGRAVITY_EXE = Path(os.path.expanduser(r"~\AppData\Local\Programs\antigravity\Antigravity.exe"))
@@ -385,12 +386,57 @@ def send_continue_to_antigravity(
         "message": f"Tempo esgotado aguardando conversa {target_conv_id or ''} ficar pronta."
     }
 
-_last_continue_timestamps: Dict[str, float] = {}
+CONTINUE_DEBOUNCE_FILE = Path(__file__).resolve().parent.parent / "data" / "continue_debounce.json"
 
-def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "continue") -> Dict[str, Any]:
+def get_language_server_pids() -> List[int]:
+    """Retorna os PIDs de todos os processos language_server em execução."""
+    pids = []
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            name = proc.info.get('name') or ''
+            if 'language_server' in name.lower():
+                pids.append(proc.info['pid'])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return pids
+
+def _is_debounced(cid: str, cooldown: float = 8.0) -> bool:
+    """Verifica se já foi enviado continue para esta conversa nos últimos cooldown segundos."""
+    try:
+        if CONTINUE_DEBOUNCE_FILE.exists():
+            with open(CONTINUE_DEBOUNCE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            last_t = data.get(cid, 0.0)
+            if time.time() - last_t < cooldown:
+                return True
+    except Exception:
+        pass
+    return False
+
+def _record_debounce(cid: str):
+    """Grava timestamp do envio para a conversa em arquivo compartilhado entre processos."""
+    try:
+        data = {}
+        if CONTINUE_DEBOUNCE_FILE.exists():
+            try:
+                with open(CONTINUE_DEBOUNCE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {}
+        now = time.time()
+        data[cid] = now
+        # Limpa entradas com mais de 120s
+        data = {k: v for k, v in data.items() if now - v < 120.0}
+        CONTINUE_DEBOUNCE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONTINUE_DEBOUNCE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+def resume_interrupted_sessions(delay_seconds: float = 0.0, prompt_text: str = "continue") -> Dict[str, Any]:
     """
     Restaura e envia 'continue' para as conversas registradas no snapshot pré-hotswap.
-    Aplica deduplicação estrita e debounce de 8 segundos para evitar qualquer envio duplo.
+    Aplica deduplicação estrita, trava de arquivo e debounce de 8 segundos para evitar qualquer envio duplo.
     Garante que novos chats nunca sejam criados.
     """
     if delay_seconds > 0:
@@ -398,6 +444,9 @@ def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "
 
     from .chat_tracker import ChatSessionTracker
     interrupted = ChatSessionTracker.get_interrupted_sessions()
+
+    # Imediatamente limpa o arquivo para que nenhum outro processo concorrente tente processar
+    ChatSessionTracker.clear_interrupted_sessions()
 
     # Deduplica sessões por conv_id
     unique_sessions = {}
@@ -408,35 +457,30 @@ def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "
                 unique_sessions[cid] = s
 
     resumed_ids = []
-    now = time.time()
-
     if unique_sessions:
         for cid, s in unique_sessions.items():
-            # Debounce: se já enviou para esta conversa nos últimos 8s, ignora
-            if now - _last_continue_timestamps.get(cid, 0) < 8.0:
+            if _is_debounced(cid, cooldown=8.0):
+                print(f"[Hot-Swap Watchdog] Conversa {cid} já recebeu continue recentemente (debounced).")
                 continue
-            _last_continue_timestamps[cid] = now
+            _record_debounce(cid)
 
             url = s.get("url")
             res = send_continue_to_antigravity(
                 prompt_text=prompt_text,
                 target_conv_id=cid,
                 saved_url=url,
-                max_wait_seconds=20.0
+                max_wait_seconds=25.0
             )
             if res.get("success"):
                 resumed_ids.append(cid)
     else:
-        # Fallback inteligente: injeta uma única vez na conversa aberta
+        # Fallback inteligente se nenhuma sessão salva: injeta apenas se houver conversa aberta
         fallback_key = "active_page"
-        if now - _last_continue_timestamps.get(fallback_key, 0) >= 8.0:
-            _last_continue_timestamps[fallback_key] = now
+        if not _is_debounced(fallback_key, cooldown=8.0):
+            _record_debounce(fallback_key)
             res = send_continue_to_antigravity(prompt_text=prompt_text, max_wait_seconds=20.0)
             if res.get("success"):
                 resumed_ids.append(res.get("path", "active_chat"))
-
-    # Limpa arquivo de sessões interrompidas para nunca reprocessar
-    ChatSessionTracker.clear_interrupted_sessions()
 
     return {
         "success": True,
@@ -445,18 +489,123 @@ def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "
         "message": f"{len(resumed_ids)} sessão(ões) retomada(s) com sucesso!"
     }
 
-def schedule_auto_continue(delay_seconds: float = 3.0, prompt_text: str = "continue"):
+def wait_and_resume_after_restart(
+    old_pids: Optional[List[int]] = None,
+    prompt_text: str = "continue",
+    max_wait_seconds: float = 35.0
+) -> Dict[str, Any]:
+    """
+    Sincronização determinística pós-restart:
+    1. Aguarda saída dos processos antigos (old_pids).
+    2. Aguarda surgimento do novo processo language_server.
+    3. Aguarda novo language_server estar saudável e pronto para RPC.
+    4. Aguarda estabilização da interface Webview/DevTools do Antigravity.
+    5. Injeta 'continue' exclusivamente nas conversas ativas salvas.
+    """
+    start_t = time.time()
+    old_pids_set = set(old_pids or [])
+
+    # ----------------------------------------------------
+    # FASE 1: Aguardar encerramento dos processos antigos
+    # ----------------------------------------------------
+    if old_pids_set:
+        print(f"[Hot-Swap Watchdog] Aguardando término dos processos antigos: {list(old_pids_set)}")
+        while time.time() - start_t < 10.0:
+            still_alive = [pid for pid in old_pids_set if psutil.pid_exists(pid)]
+            if not still_alive:
+                print("[Hot-Swap Watchdog] Todos os processos antigos foram encerrados.")
+                break
+
+            # Se passaram mais de 4s e o processo antigo ainda está vivo, encerra forçadamente
+            if time.time() - start_t > 4.0:
+                for pid in still_alive:
+                    try:
+                        p = psutil.Process(pid)
+                        p.kill()
+                        print(f"[Hot-Swap Watchdog] Processo antigo {pid} finalizado forçadamente.")
+                    except Exception:
+                        pass
+            time.sleep(0.3)
+
+    # ----------------------------------------------------
+    # FASE 2: Aguardar novo processo language_server iniciar
+    # ----------------------------------------------------
+    print("[Hot-Swap Watchdog] Aguardando inicialização do novo language_server...")
+    new_pid = None
+    while time.time() - start_t < max_wait_seconds:
+        current_pids = set(get_language_server_pids())
+        new_candidates = current_pids - old_pids_set
+        if new_candidates:
+            new_pid = list(new_candidates)[0]
+            print(f"[Hot-Swap Watchdog] Novo processo language_server detectado: PID {new_pid}")
+            break
+        elif not old_pids_set and current_pids:
+            new_pid = list(current_pids)[0]
+            print(f"[Hot-Swap Watchdog] Processo language_server detectado: PID {new_pid}")
+            break
+        time.sleep(0.3)
+
+    # ----------------------------------------------------
+    # FASE 3: Aguardar novo Language Server responder (Saúde/Porta RPC)
+    # ----------------------------------------------------
+    print("[Hot-Swap Watchdog] Aguardando novo Language Server estar pronto para RPC...")
+    from .quota_checker import _get_active_ls_info, invalidate_ls_cache
+    invalidate_ls_cache()
+
+    while time.time() - start_t < max_wait_seconds:
+        info = _get_active_ls_info(force_refresh=True)
+        if info and info.get("port"):
+            info_pid = info.get("pid")
+            if new_pid is None or info_pid is None or info_pid == new_pid or info_pid not in old_pids_set:
+                print(f"[Hot-Swap Watchdog] Language Server ativo na porta {info.get('port')} (PID {info_pid or new_pid})")
+                break
+        time.sleep(0.4)
+
+    # ----------------------------------------------------
+    # FASE 4: Aguardar estabilização do Webview do Antigravity
+    # ----------------------------------------------------
+    # Respiro essencial para o Electron reconectar ao novo processo gRPC
+    time.sleep(2.0)
+
+    print("[Hot-Swap Watchdog] Aguardando interface do Antigravity ficar ociosa e conectada...")
+    from .chat_tracker import ChatSessionTracker
+    while time.time() - start_t < max_wait_seconds:
+        sessions = ChatSessionTracker.get_open_sessions()
+        if sessions:
+            has_ready_editor = any(s.get("has_editor") and not s.get("is_busy") for s in sessions)
+            if has_ready_editor:
+                print("[Hot-Swap Watchdog] Interface do Antigravity pronta!")
+                break
+        time.sleep(0.5)
+
+    # ----------------------------------------------------
+    # FASE 5: Injeção atômica do continue
+    # ----------------------------------------------------
+    print("[Hot-Swap Watchdog] Retomando sessões interrompidas...")
+    res = resume_interrupted_sessions(delay_seconds=0, prompt_text=prompt_text)
+    print(f"[Hot-Swap Watchdog] Resultado da retomada: {res.get('message')}")
+    return res
+
+def schedule_auto_continue(
+    old_pids: Optional[List[int]] = None,
+    delay_seconds: float = 0.0,
+    prompt_text: str = "continue"
+):
     """
     Agenda o envio do 'continue' em processo desacoplado (detached process),
-    garantindo sobrevivência independente da queda do Language Server.
+    monitorando o ciclo de vida real do Language Server para garantir que
+    o continue NUNCA seja enviado antes do reinício ser concluído.
     """
+    if old_pids is None:
+        old_pids = get_language_server_pids()
+
     base_dir = Path(__file__).resolve().parent.parent
     escaped_prompt = json.dumps(prompt_text)
+    old_pids_json = json.dumps(old_pids)
+
     cmd = (
-        f"import time; "
-        f"time.sleep({delay_seconds}); "
-        f"from core.ide_reloader import resume_interrupted_sessions; "
-        f"resume_interrupted_sessions(delay_seconds=0, prompt_text={escaped_prompt})"
+        f"from core.ide_reloader import wait_and_resume_after_restart; "
+        f"wait_and_resume_after_restart(old_pids={old_pids_json}, prompt_text={escaped_prompt})"
     )
 
     try:
@@ -472,17 +621,18 @@ def schedule_auto_continue(delay_seconds: float = 3.0, prompt_text: str = "conti
         )
     except Exception:
         def _worker():
-            resume_interrupted_sessions(delay_seconds=delay_seconds, prompt_text=prompt_text)
+            wait_and_resume_after_restart(old_pids=old_pids, prompt_text=prompt_text)
 
         t = threading.Thread(target=_worker, daemon=True)
         t.start()
 
-def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 4.5) -> Dict[str, Any]:
+def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 0.0) -> Dict[str, Any]:
     """
     Reinício 100% completo e limpo do aplicativo Antigravity:
     Encerra Antigravity.exe e language_server.exe e reabre o executável principal.
-    Restaura automaticamente workspace e conversas ativas.
+    Restaura automaticamente workspace e conversas ativas após o reinício.
     """
+    old_pids = get_language_server_pids()
     exe_path = str(ANTIGRAVITY_EXE)
     if not ANTIGRAVITY_EXE.exists():
         exe_path = "Antigravity.exe"
@@ -497,7 +647,10 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
         if auto_continue:
             from .chat_tracker import ChatSessionTracker
             ChatSessionTracker.snapshot_active_sessions()
-            schedule_auto_continue(delay_seconds=continue_delay)
+            schedule_auto_continue(old_pids=old_pids)
+
+        from .quota_checker import invalidate_ls_cache
+        invalidate_ls_cache()
 
         creation_flags = 0
         if sys.platform == "win32":
@@ -511,7 +664,7 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
 
         return {
             "success": True,
-            "message": "O Antigravity está sendo reiniciado agora com a nova conta! O agente continuará automaticamente em instantes."
+            "message": "O Antigravity está sendo reiniciado agora com a nova conta! O agente continuará automaticamente após o reinício."
         }
     except Exception as e:
         return {
@@ -519,23 +672,44 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
             "message": f"Falha ao disparar reinício do Antigravity: {str(e)}"
         }
 
-def apply_hotswap_reload(auto_continue: bool = True, continue_delay: float = 3.0) -> Dict[str, Any]:
+def apply_hotswap_reload(auto_continue: bool = True, continue_delay: float = 0.0) -> Dict[str, Any]:
     """
     Método padrão chamado após o Hot-Swap:
-    1. Se auto_continue=True, agenda o envio desacoplado de 'continue'.
-    2. Reinicia o language_server para aplicar as novas credenciais.
+    1. Registra snapshot das conversas ativas (se auto_continue=True).
+    2. Identifica os PIDs atuais do language_server.
+    3. Invalida o cache de status do language_server.
+    4. Agenda o watchdog desacoplado (que aguardará o novo processo iniciar).
+    5. Dispara o reinício do language_server via RPC /Restart.
     """
+    old_pids = get_language_server_pids()
+
     if auto_continue:
-        schedule_auto_continue(delay_seconds=continue_delay)
+        try:
+            from .chat_tracker import ChatSessionTracker
+            ChatSessionTracker.snapshot_active_sessions()
+        except Exception:
+            pass
+        schedule_auto_continue(old_pids=old_pids)
+
+    from .quota_checker import invalidate_ls_cache
+    invalidate_ls_cache()
 
     ls_ok = restart_language_server()
     win_res = None
     if not ls_ok:
-        win_res = reload_antigravity_window()
+        if old_pids:
+            for pid in old_pids:
+                try:
+                    psutil.Process(pid).kill()
+                    ls_ok = True
+                except Exception:
+                    pass
+        if not ls_ok:
+            win_res = reload_antigravity_window()
 
     return {
         "success": True,
-        "message": "Antigravity sincronizado com a nova conta! (Auto-Continue agendado)"
+        "message": "Antigravity sincronizado com a nova conta! (Auto-Continue sincronizado pós-restart)"
     }
 
 if __name__ == "__main__":

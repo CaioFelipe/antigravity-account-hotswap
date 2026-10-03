@@ -13,20 +13,27 @@ PROXY_ACCOUNTS_FILE = Path(os.path.expanduser("~/.config/antigravity-proxy/accou
 _cached_ls_info: Optional[Dict[str, Any]] = None
 _last_ls_check: float = 0.0
 
-def _get_active_ls_info() -> Optional[Dict[str, Any]]:
+def invalidate_ls_cache():
+    """Limpa o cache de informações do Language Server."""
+    global _cached_ls_info, _last_ls_check
+    _cached_ls_info = None
+    _last_ls_check = 0.0
+
+def _get_active_ls_info(force_refresh: bool = False) -> Optional[Dict[str, Any]]:
     """
     Localiza dinamicamente o language_server.exe em execução,
-    extrai a porta HTTP e o csrf_token com cache de 3 segundos.
+    extrai o PID, a porta HTTP e o csrf_token com cache de 3 segundos.
     """
     global _cached_ls_info, _last_ls_check
     now = time.time()
-    if _cached_ls_info is not None and (now - _last_ls_check) < 3.0:
+    if not force_refresh and _cached_ls_info is not None and (now - _last_ls_check) < 3.0:
         return _cached_ls_info
 
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             name = proc.info.get('name') or ''
             if 'language_server' in name.lower():
+                pid = proc.info.get('pid')
                 cmdline = ' '.join(proc.info.get('cmdline') or [])
                 m_csrf = re.search(r'--csrf_token\s+([a-f0-9\-]+)', cmdline)
                 csrf = m_csrf.group(1) if m_csrf else ''
@@ -52,6 +59,7 @@ def _get_active_ls_info() -> Optional[Dict[str, Any]]:
                             data = json.loads(resp.read().decode())
                             us = data.get("userStatus", {})
                             _cached_ls_info = {
+                                "pid": pid,
                                 "email": us.get("email", "").lower(),
                                 "name": us.get("name", ""),
                                 "port": port,
