@@ -597,6 +597,7 @@
 
       <div style="background: rgba(10, 13, 20, 0.5); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.86rem; color: var(--text-secondary); line-height: 1.5;">
         Clique no botão abaixo para abrir a página oficial de login do Google. Faça o login e confirme o acesso. O sistema detectará a conta e salvará automaticamente!
+        <br><strong style="color: #fbbf24;">⚠️ Experimental:</strong> este fluxo depende de uma credencial extraída localmente e pode falhar silenciosamente em algumas instalações. Se o login no navegador terminar mas a conta não aparecer aqui em alguns segundos, use o <strong>Plano B</strong> abaixo — ele é 100% confiável.
       </div>
 
       <button class="btn btn-primary" id="btnIniciarLogin" onclick="iniciarLoginGoogle()" style="width: 100%; padding: 12px;">
@@ -605,6 +606,17 @@
 
       <div id="enrollLinkManual" style="display: none; font-size: 0.8rem; word-break: break-all; text-align: center;">
         <a href="#" id="linkUrlGoogle" target="_blank" style="color: #60a5fa;">Se o navegador não abriu automaticamente, clique aqui</a>
+      </div>
+
+      <div style="margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border-color);">
+        <div style="font-size: 0.86rem; font-weight: 600; margin-bottom: 6px;">✅ Plano B (recomendado, sempre funciona)</div>
+        <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 10px;">
+          1. Dentro do próprio <strong>Antigravity</strong>, faça logout e entre com a outra conta Google (login nativo).<br>
+          2. Volte aqui e clique em "Sincronizar do Windows" — a conta recém-logada será capturada e adicionada ao cofre.
+        </div>
+        <button class="btn btn-secondary" onclick="sincronizarAtiva()" style="width: 100%; padding: 10px;">
+          📥 Sincronizar do Windows (Plano B)
+        </button>
       </div>
 
       <div class="modal-footer">

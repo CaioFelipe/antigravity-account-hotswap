@@ -101,7 +101,7 @@ def _format_time_left(seconds: int) -> str:
     rem_hours = hours % 24
     return f"{days}d {rem_hours}h"
 
-def get_account_live_quota(account: Dict[str, Any], is_active_in_ide: bool = False, ls_cache: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def get_account_live_quota(account: Dict[str, Any], is_active_in_ide: bool = False, ls_cache: Optional[Dict[str, Any]] = None, vault: Optional[Any] = None) -> Dict[str, Any]:
     """
     Retorna o status em tempo real de uma conta Google:
     - Se a conta for a ativa no Antigravity, lê diretamente as cotas da language_server API.
@@ -180,6 +180,14 @@ def get_account_live_quota(account: Dict[str, Any], is_active_in_ide: bool = Fal
             "seconds_remaining": max_reset_seconds if is_weekly_blocked else 0
         }
 
+        # Persiste esta leitura real para que, quando a conta ficar inativa (ou o painel
+        # for reiniciado), o sistema não volte a exibi-la como "100% livre" por padrão.
+        if vault is not None:
+            try:
+                vault.update_account_quota_snapshot(account.get("id"), quota_5h, quota_weekly, model_quotas)
+            except Exception:
+                pass
+
         return {
             "is_live_from_ide": True,
             "quota_5h": quota_5h,
@@ -217,6 +225,26 @@ def get_account_live_quota(account: Dict[str, Any], is_active_in_ide: bool = Fal
     is_5h = (effective_seconds > 0 and (status == "COOLDOWN_5H" or (effective_seconds <= 18000 and proxy_limited)))
     is_weekly = (effective_seconds > 0 and (status == "COOLDOWN_WEEKLY" or (effective_seconds > 18000 and proxy_limited)))
 
+    # Projeta a última leitura REAL conhecida desta conta (capturada enquanto esteve ativa).
+    # Sem isso, uma conta inativa sem cooldown explícito sempre aparecia como "100% livre",
+    # mesmo que sua cota real já estivesse parcial ou totalmente consumida.
+    last_checked_at = account.get("last_quota_checked_at") or 0
+
+    def _project(last: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not last or not last_checked_at:
+            return None
+        sec_at_check = last.get("seconds_remaining", 0) or 0
+        if sec_at_check <= 0:
+            return None
+        reset_at = last_checked_at + sec_at_check
+        now_left = int(reset_at - now)
+        if now_left <= 0:
+            return None  # já passou do horário de reset conhecido -> considera recuperada
+        projected = dict(last)
+        projected["seconds_remaining"] = now_left
+        projected["time_remaining_str"] = _format_time_left(now_left)
+        return projected
+
     if is_5h:
         quota_5h = {
             "available": False,
@@ -227,14 +255,25 @@ def get_account_live_quota(account: Dict[str, Any], is_active_in_ide: bool = Fal
             "time_remaining_str": _format_time_left(effective_seconds)
         }
     else:
-        quota_5h = {
-            "available": True,
-            "percent_remaining": 100,
-            "percent_used": 0,
-            "badge": "100% Livre",
-            "seconds_remaining": 0,
-            "time_remaining_str": ""
-        }
+        proj = _project(account.get("last_quota_5h"))
+        if proj:
+            quota_5h = {
+                "available": proj.get("percent_remaining", 100) > 0,
+                "percent_remaining": proj.get("percent_remaining", 100),
+                "percent_used": proj.get("percent_used", 0),
+                "badge": f"{proj.get('percent_remaining', 100)}% (última leitura real) • Reseta em {proj.get('time_remaining_str', '')}",
+                "seconds_remaining": proj.get("seconds_remaining", 0),
+                "time_remaining_str": proj.get("time_remaining_str", "")
+            }
+        else:
+            quota_5h = {
+                "available": True,
+                "percent_remaining": 100,
+                "percent_used": 0,
+                "badge": "100% Livre",
+                "seconds_remaining": 0,
+                "time_remaining_str": ""
+            }
 
     if is_weekly:
         quota_weekly = {
@@ -244,22 +283,31 @@ def get_account_live_quota(account: Dict[str, Any], is_active_in_ide: bool = Fal
             "seconds_remaining": effective_seconds
         }
     else:
-        quota_weekly = {
-            "available": True,
-            "percent_remaining": 100,
-            "badge": "100% Disponível",
-            "seconds_remaining": 0
-        }
+        proj_w = _project(account.get("last_quota_weekly"))
+        if proj_w:
+            quota_weekly = {
+                "available": proj_w.get("percent_remaining", 100) > 0,
+                "percent_remaining": proj_w.get("percent_remaining", 100),
+                "badge": f"{proj_w.get('percent_remaining', 100)}% (última leitura real) • Reseta em {proj_w.get('time_remaining_str', '')}",
+                "seconds_remaining": proj_w.get("seconds_remaining", 0)
+            }
+        else:
+            quota_weekly = {
+                "available": True,
+                "percent_remaining": 100,
+                "badge": "100% Disponível",
+                "seconds_remaining": 0
+            }
 
     return {
         "is_live_from_ide": False,
         "quota_5h": quota_5h,
         "quota_weekly": quota_weekly,
-        "models": [],
+        "models": account.get("last_quota_models", []),
         "is_healthy": (not is_5h and not is_weekly)
     }
 
-def get_all_accounts_quota_map(accounts: List[Dict[str, Any]], active_account_id: Optional[str] = None) -> Dict[str, Any]:
+def get_all_accounts_quota_map(accounts: List[Dict[str, Any]], active_account_id: Optional[str] = None, vault: Optional[Any] = None) -> Dict[str, Any]:
     """
     Retorna o mapa de cotas calculado para todas as contas da lista,
     consultando o language_server apenas uma vez para otimização.
@@ -268,5 +316,5 @@ def get_all_accounts_quota_map(accounts: List[Dict[str, Any]], active_account_id
     result = {}
     for acc in accounts:
         is_active = (acc.get("id") == active_account_id)
-        result[acc.get("id")] = get_account_live_quota(acc, is_active_in_ide=is_active, ls_cache=ls_cache)
+        result[acc.get("id")] = get_account_live_quota(acc, is_active_in_ide=is_active, ls_cache=ls_cache, vault=vault)
     return result

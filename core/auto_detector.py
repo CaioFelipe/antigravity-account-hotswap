@@ -12,6 +12,9 @@ from .switcher import AccountSwitcher
 
 PROXY_ACCOUNTS_FILE = Path(os.path.expanduser("~/.config/antigravity-proxy/accounts.json"))
 
+# Limiar crítico: com 2% ou menos de cota restante (5h ou semanal), troca automaticamente.
+QUOTA_CRITICAL_THRESHOLD_PERCENT = 2
+
 def parse_error_output(text: str) -> Optional[Dict[str, Any]]:
     """
     Analisa saídas de erro do Google Gemini, Antigravity ou agy CLI
@@ -223,6 +226,59 @@ class AutoQuotaDetector:
                                     )
         return events
 
+    def scan_active_account_quota(self) -> Optional[Dict[str, Any]]:
+        """
+        Monitora a cota REAL (ao vivo, via language_server) da conta atualmente ativa no
+        Antigravity. Se a cota disponível cair a QUOTA_CRITICAL_THRESHOLD_PERCENT% ou menos,
+        tanto na janela de 5 horas quanto na semanal, dispara o Hot-Swap automático para a
+        próxima conta saudável, usando o horário exato de reset informado pelo Google.
+        """
+        active = self.vault.get_active_account()
+        if not active:
+            return None
+
+        # Já em cooldown: evita disparar de novo enquanto o swap anterior ainda não foi concluído
+        if active.get("status") in ("COOLDOWN_5H", "COOLDOWN_WEEKLY") and active.get("cooldown_until"):
+            return None
+
+        from .quota_checker import get_account_live_quota, _get_active_ls_info
+        ls_cache = _get_active_ls_info()
+        live = get_account_live_quota(active, is_active_in_ide=True, ls_cache=ls_cache, vault=self.vault)
+
+        # Só age se confirmarmos, via language_server, que esta é de fato a conta logada agora
+        if not live.get("is_live_from_ide"):
+            return None
+
+        q5h = live.get("quota_5h", {})
+        qweek = live.get("quota_weekly", {})
+
+        critical_type = None
+        seconds_left = 0
+        if q5h.get("percent_remaining", 100) <= QUOTA_CRITICAL_THRESHOLD_PERCENT:
+            critical_type = "5h"
+            seconds_left = q5h.get("seconds_remaining", 0)
+        elif qweek.get("percent_remaining", 100) <= QUOTA_CRITICAL_THRESHOLD_PERCENT:
+            critical_type = "weekly"
+            seconds_left = qweek.get("seconds_remaining", 0)
+
+        if not critical_type:
+            return None
+
+        custom_until = (time.time() + seconds_left) if seconds_left and seconds_left > 0 else None
+
+        swap_res = self.switcher.report_quota_and_swap(
+            quota_type=critical_type,
+            account_id=active["id"],
+            custom_until=custom_until
+        )
+        self.vault.log_history(
+            "AUTO_HOTSWAP_LIVE_QUOTA",
+            f"Cota crítica (≤{QUOTA_CRITICAL_THRESHOLD_PERCENT}%, janela {critical_type}) detectada em tempo real para "
+            f"'{active.get('name')}'. {swap_res.get('message', '')}",
+            details={"quota_type": critical_type, "account_id": active["id"]}
+        )
+        return swap_res
+
     def start_background_scanner(self, interval: int = 5):
         """Inicia uma thread em segundo plano para varredura contínua de limites."""
         if self._running:
@@ -233,6 +289,7 @@ class AutoQuotaDetector:
             while self._running:
                 try:
                     self.scan_proxy_rate_limits()
+                    self.scan_active_account_quota()
                     self.vault.refresh_cooldowns()
                 except Exception:
                     pass

@@ -64,7 +64,7 @@ class AccountSwitcher:
 
         # Calcula cotas em tempo real para todas as contas
         active_id = active.get("id") if active else None
-        quotas_map = get_all_accounts_quota_map(accounts, active_id)
+        quotas_map = get_all_accounts_quota_map(accounts, active_id, vault=self.vault)
 
         # Detecta sessões abertas no Antigravity
         sessions = []

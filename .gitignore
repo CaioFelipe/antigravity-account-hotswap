@@ -3,6 +3,8 @@
 # ==============================================================================
 data/accounts_vault.json
 accounts_vault.json
+data/*.json
+!data/accounts_vault.example.json
 *.json.secret
 *.token
 *.key
