@@ -81,25 +81,29 @@ class ChatSessionTracker:
         return sessions
 
     @staticmethod
-    def snapshot_busy_sessions() -> List[Dict[str, Any]]:
+    def snapshot_active_sessions() -> List[Dict[str, Any]]:
         """
-        Registra as sessões que estão ocupadas executando antes de uma troca de conta.
-        Apenas as conversas que forem salvas aqui receberão 'continue' pós-hotswap.
+        Registra as sessões de conversas abertas e conectadas no Antigravity antes da troca.
+        Captura tanto as que estão executando quanto as que estão abertas/ociosas aguardando,
+        garantindo que o continue seja enviado para retomar o chat que o usuário está usando.
         """
         sessions = ChatSessionTracker.get_open_sessions()
-        busy = [s for s in sessions if s.get("is_busy") and s.get("conv_id")]
+        active = [s for s in sessions if s.get("conv_id")]
 
         try:
             INTERRUPTED_SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
             with open(INTERRUPTED_SESSIONS_FILE, "w", encoding="utf-8") as f:
                 json.dump({
                     "timestamp": time.time(),
-                    "sessions": busy
+                    "sessions": active
                 }, f, indent=2, ensure_ascii=False)
         except Exception:
             pass
 
-        return busy
+        return active
+
+    # Alias para compatibilidade
+    snapshot_busy_sessions = snapshot_active_sessions
 
     @staticmethod
     def get_interrupted_sessions() -> List[Dict[str, Any]]:

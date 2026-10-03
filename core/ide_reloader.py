@@ -387,37 +387,37 @@ def send_continue_to_antigravity(
 
 def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "continue") -> Dict[str, Any]:
     """
-    Restaura e envia 'continue' EXCLUSIVAMENTE para as conversas que foram
-    interrompidas pelo Hot-Swap (registradas no snapshot de sessões ocupadas).
-    Conversas já concluídas (IDLE) não são afetadas.
+    Restaura e envia 'continue' para as conversas registradas no snapshot pré-hotswap.
+    Caso o snapshot esteja vazio, aplica fallback inteligente para a conversa atualmente aberta.
+    Garante que novos chats nunca sejam criados.
     """
     if delay_seconds > 0:
         time.sleep(delay_seconds)
 
     from .chat_tracker import ChatSessionTracker
     interrupted = ChatSessionTracker.get_interrupted_sessions()
-    if not interrupted:
-        return {
-            "success": True,
-            "resumed_count": 0,
-            "message": "Nenhuma sessão estava ocupada no momento do Hot-Swap; nenhum continue necessário."
-        }
 
     resumed_ids = []
-    for s in interrupted:
-        cid = s.get("conv_id")
-        url = s.get("url")
-        if not cid:
-            continue
-        res = send_continue_to_antigravity(
-            prompt_text=prompt_text,
-            target_conv_id=cid,
-            saved_url=url,
-            max_wait_seconds=20.0
-        )
+    if interrupted:
+        for s in interrupted:
+            cid = s.get("conv_id")
+            url = s.get("url")
+            if not cid:
+                continue
+            res = send_continue_to_antigravity(
+                prompt_text=prompt_text,
+                target_conv_id=cid,
+                saved_url=url,
+                max_wait_seconds=20.0
+            )
+            if res.get("success"):
+                resumed_ids.append(cid)
+                ChatSessionTracker.clear_interrupted_sessions(conv_id=cid)
+    else:
+        # Fallback inteligente: injeta na conversa que estiver aberta no Antigravity
+        res = send_continue_to_antigravity(prompt_text=prompt_text, max_wait_seconds=20.0)
         if res.get("success"):
-            resumed_ids.append(cid)
-            ChatSessionTracker.clear_interrupted_sessions(conv_id=cid)
+            resumed_ids.append(res.get("path", "active_chat"))
 
     return {
         "success": True,
@@ -429,7 +429,7 @@ def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "
 def schedule_auto_continue(delay_seconds: float = 3.0, prompt_text: str = "continue"):
     """
     Agenda o envio do 'continue' em processo desacoplado (detached process),
-    acionando o resume inteligente apenas para conversas que estavam ocupadas.
+    garantindo sobrevivência independente da queda do Language Server.
     """
     base_dir = Path(__file__).resolve().parent.parent
     escaped_prompt = json.dumps(prompt_text)
@@ -477,7 +477,7 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
     try:
         if auto_continue:
             from .chat_tracker import ChatSessionTracker
-            ChatSessionTracker.snapshot_busy_sessions()
+            ChatSessionTracker.snapshot_active_sessions()
             schedule_auto_continue(delay_seconds=continue_delay)
 
         creation_flags = 0
@@ -503,25 +503,20 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
 def apply_hotswap_reload(auto_continue: bool = True, continue_delay: float = 3.0) -> Dict[str, Any]:
     """
     Método padrão chamado após o Hot-Swap:
-    1. Se auto_continue=True e houver sessões interrompidas, agenda a retoma inteligente.
+    1. Se auto_continue=True, agenda o envio desacoplado de 'continue'.
     2. Reinicia o language_server para aplicar as novas credenciais.
     """
-    from .chat_tracker import ChatSessionTracker
-    interrupted = ChatSessionTracker.get_interrupted_sessions()
-
-    if auto_continue and interrupted:
+    if auto_continue:
         schedule_auto_continue(delay_seconds=continue_delay)
 
     ls_ok = restart_language_server()
-    # Se o restart do language_server falhar, tenta recarregar a janela como fallback
     win_res = None
     if not ls_ok:
         win_res = reload_antigravity_window()
 
     return {
         "success": True,
-        "interrupted_sessions": len(interrupted),
-        "message": f"Antigravity sincronizado com a nova conta! ({len(interrupted)} sessão(ões) ativa(s) agendadas para auto-continue)"
+        "message": "Antigravity sincronizado com a nova conta! (Auto-Continue agendado)"
     }
 
 if __name__ == "__main__":
