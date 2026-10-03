@@ -89,6 +89,10 @@ class HotswapHandler(BaseHTTPRequestHandler):
         elif path == "/api/accounts/enroll_status":
             st = enrollment_manager.get_status()
             self._send_json(st)
+        elif path == "/api/sessions":
+            from core.chat_tracker import ChatSessionTracker
+            sessions = ChatSessionTracker.get_open_sessions()
+            self._send_json({"sessions": sessions})
         else:
             self.send_error(404, "Endpoint não encontrado")
 
@@ -103,7 +107,7 @@ class HotswapHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # 1. Hot-Swap de Conta com Auto-Continue
+        # 1. Hot-Swap de Conta com Auto-Continue Inteligente
         if path == "/api/switch":
             account_id = payload.get("account_id")
             auto_continue = payload.get("auto_continue", True)
@@ -116,7 +120,8 @@ class HotswapHandler(BaseHTTPRequestHandler):
         # 2. Injetar comando 'continue' no chat do Antigravity
         elif path == "/api/send_continue":
             prompt = payload.get("prompt", "continue")
-            res = send_continue_to_antigravity(prompt_text=prompt)
+            conv_id = payload.get("conv_id")
+            res = send_continue_to_antigravity(prompt_text=prompt, target_conv_id=conv_id)
             self._send_json(res)
 
         # 3. Reinício Completo do Antigravity (1-Clique)

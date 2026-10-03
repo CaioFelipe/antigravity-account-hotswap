@@ -66,12 +66,24 @@ class AccountSwitcher:
         active_id = active.get("id") if active else None
         quotas_map = get_all_accounts_quota_map(accounts, active_id)
 
+        # Detecta sessões abertas no Antigravity
+        sessions = []
+        interrupted_count = 0
+        try:
+            from .chat_tracker import ChatSessionTracker
+            sessions = ChatSessionTracker.get_open_sessions()
+            interrupted_count = len(ChatSessionTracker.get_interrupted_sessions())
+        except Exception:
+            pass
+
         return {
             "active_account": active,
             "wincred_synced": wincred_synced,
             "total_accounts": len(accounts),
             "accounts": accounts,
             "quotas": quotas_map,
+            "open_sessions": sessions,
+            "interrupted_sessions_count": interrupted_count,
             "now": time.time()
         }
 
@@ -82,7 +94,7 @@ class AccountSwitcher:
         2. Monta o payload JSON completo exigido pelo Antigravity (com id_token e token expirável).
         3. Grava no cofre do Windows (gemini:antigravity).
         4. Opcionalmente reinicia o Language Server em background para o Antigravity assumir a nova conta na hora.
-        5. Se auto_continue=True, envia 'continue' para os agentes retomarem o trabalho automaticamente.
+        5. Se auto_continue=True, tira snapshot de chats em execução e retoma exclusivamente esses chats.
         """
         account = self.vault.get_account(account_id)
         if not account:
@@ -156,7 +168,15 @@ class AccountSwitcher:
             details={"account_id": account_id, "email": account.get("email")}
         )
 
-        # 5. Aplica reload no Antigravity automaticamente se solicitado e agenda Auto-Continue
+        # 5. Snapshot de sessões ativas ANTES de reiniciar o Language Server
+        if auto_continue:
+            try:
+                from .chat_tracker import ChatSessionTracker
+                ChatSessionTracker.snapshot_busy_sessions()
+            except Exception:
+                pass
+
+        # 6. Aplica reload no Antigravity automaticamente se solicitado e agenda Auto-Continue inteligente
         reload_msg = ""
         if auto_reload:
             try:

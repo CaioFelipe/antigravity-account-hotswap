@@ -557,6 +557,20 @@
       </div>
     </div>
 
+    <!-- Antigravity Active Sessions Banner -->
+    <div class="sessions-banner" id="sessionsBanner" style="display: none; margin-bottom: 24px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 12px; padding: 16px 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.1rem;">💬</span>
+          <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">Sessões do Antigravity em Tempo Real</span>
+        </div>
+        <span id="sessionsCountBadge" style="font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: rgba(59, 130, 246, 0.2); color: #93c5fd;"></span>
+      </div>
+      <div id="sessionsList" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Injetado dinamicamente -->
+      </div>
+    </div>
+
     <!-- Accounts Grid -->
     <div class="grid-header">
       <h2 class="grid-title">Suas Contas</h2>
@@ -723,6 +737,56 @@
 
         grid.appendChild(card);
       });
+
+      // Renderiza abas/sessões ativas do Antigravity
+      const sessions = state.open_sessions || [];
+      const banner = document.getElementById("sessionsBanner");
+      const list = document.getElementById("sessionsList");
+      const badge = document.getElementById("sessionsCountBadge");
+
+      if (banner && list && badge) {
+        if (sessions.length > 0) {
+          banner.style.display = "block";
+          badge.innerText = `${sessions.length} aba(s) detectada(s)`;
+          list.innerHTML = sessions.map(s => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(26, 34, 51, 0.6); border: 1px solid rgba(39, 51, 77, 0.8); border-radius: 8px;">
+              <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-right: 12px;">
+                <span style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                  ${s.title}
+                </span>
+                <span style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">
+                  ID: ${s.conv_id || 'Principal / Home'} ${s.pathname ? '• ' + s.pathname : ''}
+                </span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                <span style="font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${s.is_busy ? 'background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);' : 'background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);'}">
+                  ${s.is_busy ? '● Executando Tarefa' : '✓ Concluído / Ocioso'}
+                </span>
+                <button class="btn btn-secondary" onclick="enviarContinueParaSessao('${s.conv_id || ''}')" style="padding: 4px 10px; font-size: 0.76rem;" title="Envia 'continue' especificamente para este chat">
+                  ▶ Continue
+                </button>
+              </div>
+            </div>
+          `).join("");
+        } else {
+          banner.style.display = "none";
+        }
+      }
+    }
+
+    async function enviarContinueParaSessao(convId) {
+      showToast("Enviando 'continue' para a conversa...");
+      try {
+        const res = await fetch("/api/send_continue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: "continue", conv_id: convId })
+        });
+        const data = await res.json();
+        showToast(data.message || "Comando enviado!");
+      } catch (err) {
+        showToast("Erro ao enviar comando.");
+      }
     }
 
     // Ação de Troca Rápida com Auto-Continue

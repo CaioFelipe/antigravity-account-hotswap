@@ -250,17 +250,43 @@ def reload_antigravity_window() -> Dict[str, Any]:
             "message": f"Erro ao comunicar com DevTools: {str(e)}"
         }
 
-def send_continue_to_antigravity(prompt_text: str = "continue", max_wait_seconds: float = 20.0) -> Dict[str, Any]:
+def send_continue_to_antigravity(
+    prompt_text: str = "continue",
+    target_conv_id: Optional[str] = None,
+    saved_url: Optional[str] = None,
+    max_wait_seconds: float = 20.0
+) -> Dict[str, Any]:
     """
     Injeta e envia automaticamente uma mensagem no chat do Google Antigravity.
-    Monitora a interface até que o chat esteja pronto e desocupado para disparar o envio.
-    Compatível com Meta Lexical editor e Chrome DevTools Protocol.
+    Se target_conv_id for fornecido, garante que o comando seja enviado EXCLUSIVAMENTE
+    na conversa correspondente, evitando criar novos chats indesejados.
     """
     start_time = time.time()
     escaped_prompt = json.dumps(prompt_text)
+    escaped_target_id = json.dumps(target_conv_id) if target_conv_id else "null"
+    escaped_saved_url = json.dumps(saved_url) if saved_url else "null"
 
     js_code = f"""
     (async () => {{
+        const targetId = {escaped_target_id};
+        const savedUrl = {escaped_saved_url};
+        const pathname = window.location.pathname || '';
+
+        // Se uma conversa específica foi solicitada, validar que estamos nela
+        if (targetId) {{
+            if (!pathname.includes(targetId)) {{
+                if (savedUrl && !pathname.includes('/c/')) {{
+                    window.location.href = savedUrl;
+                }}
+                return {{ status: 'wrong_conversation', currentPath: pathname }};
+            }}
+        }} else {{
+            // Se nenhum targetId foi passado, evitar injetar se a tela for Novo Chat (/)
+            if (!pathname.includes('/c/')) {{
+                return {{ status: 'no_active_conversation', currentPath: pathname }};
+            }}
+        }}
+
         const editor = document.querySelector('[contenteditable="true"], [aria-label="Message input"]');
         if (!editor) return {{ status: 'waiting_editor' }};
 
@@ -312,7 +338,7 @@ def send_continue_to_antigravity(prompt_text: str = "continue", max_wait_seconds
 
         await new Promise(r => setTimeout(r, 150));
 
-        return {{ status: 'sent' }};
+        return {{ status: 'sent', path: pathname }};
     }})()
     """
 
@@ -344,7 +370,8 @@ def send_continue_to_antigravity(prompt_text: str = "continue", max_wait_seconds
                     if st == "sent":
                         return {
                             "success": True,
-                            "message": f"Comando '{prompt_text}' injetado com sucesso no Antigravity!"
+                            "message": f"Comando '{prompt_text}' injetado com sucesso na conversa!",
+                            "path": res.get("path")
                         }
                     elif st == "still_busy":
                         break
@@ -355,21 +382,62 @@ def send_continue_to_antigravity(prompt_text: str = "continue", max_wait_seconds
 
     return {
         "success": False,
-        "message": "Tempo esgotado aguardando interface do Antigravity ficar pronta."
+        "message": f"Tempo esgotado aguardando conversa {target_conv_id or ''} ficar pronta."
+    }
+
+def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "continue") -> Dict[str, Any]:
+    """
+    Restaura e envia 'continue' EXCLUSIVAMENTE para as conversas que foram
+    interrompidas pelo Hot-Swap (registradas no snapshot de sessões ocupadas).
+    Conversas já concluídas (IDLE) não são afetadas.
+    """
+    if delay_seconds > 0:
+        time.sleep(delay_seconds)
+
+    from .chat_tracker import ChatSessionTracker
+    interrupted = ChatSessionTracker.get_interrupted_sessions()
+    if not interrupted:
+        return {
+            "success": True,
+            "resumed_count": 0,
+            "message": "Nenhuma sessão estava ocupada no momento do Hot-Swap; nenhum continue necessário."
+        }
+
+    resumed_ids = []
+    for s in interrupted:
+        cid = s.get("conv_id")
+        url = s.get("url")
+        if not cid:
+            continue
+        res = send_continue_to_antigravity(
+            prompt_text=prompt_text,
+            target_conv_id=cid,
+            saved_url=url,
+            max_wait_seconds=20.0
+        )
+        if res.get("success"):
+            resumed_ids.append(cid)
+            ChatSessionTracker.clear_interrupted_sessions(conv_id=cid)
+
+    return {
+        "success": True,
+        "resumed_count": len(resumed_ids),
+        "resumed_conversations": resumed_ids,
+        "message": f"{len(resumed_ids)} sessão(ões) retomada(s) com sucesso!"
     }
 
 def schedule_auto_continue(delay_seconds: float = 3.0, prompt_text: str = "continue"):
     """
     Agenda o envio do 'continue' em processo desacoplado (detached process),
-    garantindo que sobreviva mesmo se o processo chamador ou o Language Server for encerrado.
+    acionando o resume inteligente apenas para conversas que estavam ocupadas.
     """
     base_dir = Path(__file__).resolve().parent.parent
     escaped_prompt = json.dumps(prompt_text)
     cmd = (
         f"import time; "
         f"time.sleep({delay_seconds}); "
-        f"from core.ide_reloader import send_continue_to_antigravity; "
-        f"send_continue_to_antigravity(prompt_text={escaped_prompt})"
+        f"from core.ide_reloader import resume_interrupted_sessions; "
+        f"resume_interrupted_sessions(delay_seconds=0, prompt_text={escaped_prompt})"
     )
 
     try:
@@ -385,8 +453,7 @@ def schedule_auto_continue(delay_seconds: float = 3.0, prompt_text: str = "conti
         )
     except Exception:
         def _worker():
-            time.sleep(delay_seconds)
-            send_continue_to_antigravity(prompt_text=prompt_text)
+            resume_interrupted_sessions(delay_seconds=delay_seconds, prompt_text=prompt_text)
 
         t = threading.Thread(target=_worker, daemon=True)
         t.start()
@@ -409,6 +476,8 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
 
     try:
         if auto_continue:
+            from .chat_tracker import ChatSessionTracker
+            ChatSessionTracker.snapshot_busy_sessions()
             schedule_auto_continue(delay_seconds=continue_delay)
 
         creation_flags = 0
@@ -434,22 +503,26 @@ def restart_antigravity_app(auto_continue: bool = True, continue_delay: float = 
 def apply_hotswap_reload(auto_continue: bool = True, continue_delay: float = 3.0) -> Dict[str, Any]:
     """
     Método padrão chamado após o Hot-Swap:
-    1. Se auto_continue=True, agenda o envio desacoplado de 'continue'.
+    1. Se auto_continue=True e houver sessões interrompidas, agenda a retoma inteligente.
     2. Reinicia o language_server para aplicar as novas credenciais.
-    3. Recarrega as páginas da interface webview do Antigravity.
     """
-    if auto_continue:
+    from .chat_tracker import ChatSessionTracker
+    interrupted = ChatSessionTracker.get_interrupted_sessions()
+
+    if auto_continue and interrupted:
         schedule_auto_continue(delay_seconds=continue_delay)
 
     ls_ok = restart_language_server()
-    win_res = reload_antigravity_window()
+    # Se o restart do language_server falhar, tenta recarregar a janela como fallback
+    win_res = None
+    if not ls_ok:
+        win_res = reload_antigravity_window()
 
-    if ls_ok:
-        return {
-            "success": True,
-            "message": "Antigravity sincronizado com a nova conta! (Auto-Continue agendado)"
-        }
-    return win_res
+    return {
+        "success": True,
+        "interrupted_sessions": len(interrupted),
+        "message": f"Antigravity sincronizado com a nova conta! ({len(interrupted)} sessão(ões) ativa(s) agendadas para auto-continue)"
+    }
 
 if __name__ == "__main__":
     print("Testando injeção de continue...")
