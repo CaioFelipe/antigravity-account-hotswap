@@ -86,9 +86,16 @@ class ChatSessionTracker:
         Registra as sessões de conversas abertas e conectadas no Antigravity antes da troca.
         Captura tanto as que estão executando quanto as que estão abertas/ociosas aguardando,
         garantindo que o continue seja enviado para retomar o chat que o usuário está usando.
+        Deduplica por conv_id para evitar envios redundantes.
         """
         sessions = ChatSessionTracker.get_open_sessions()
-        active = [s for s in sessions if s.get("conv_id")]
+        seen_cids = set()
+        active = []
+        for s in sessions:
+            cid = s.get("conv_id")
+            if cid and cid not in seen_cids:
+                seen_cids.add(cid)
+                active.append(s)
 
         try:
             INTERRUPTED_SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)

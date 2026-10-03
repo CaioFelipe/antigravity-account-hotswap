@@ -324,17 +324,17 @@ def send_continue_to_antigravity(
 
         if (sendBtn && !sendBtn.disabled) {{
             sendBtn.click();
+        }} else {{
+            const enterEv = new KeyboardEvent('keydown', {{
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true,
+                cancelable: true
+            }});
+            editor.dispatchEvent(enterEv);
         }}
-
-        const enterEv = new KeyboardEvent('keydown', {{
-            key: 'Enter',
-            code: 'Enter',
-            keyCode: 13,
-            which: 13,
-            bubbles: true,
-            cancelable: true
-        }});
-        editor.dispatchEvent(enterEv);
 
         await new Promise(r => setTimeout(r, 150));
 
@@ -385,10 +385,12 @@ def send_continue_to_antigravity(
         "message": f"Tempo esgotado aguardando conversa {target_conv_id or ''} ficar pronta."
     }
 
+_last_continue_timestamps: Dict[str, float] = {}
+
 def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "continue") -> Dict[str, Any]:
     """
     Restaura e envia 'continue' para as conversas registradas no snapshot pré-hotswap.
-    Caso o snapshot esteja vazio, aplica fallback inteligente para a conversa atualmente aberta.
+    Aplica deduplicação estrita e debounce de 8 segundos para evitar qualquer envio duplo.
     Garante que novos chats nunca sejam criados.
     """
     if delay_seconds > 0:
@@ -397,13 +399,25 @@ def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "
     from .chat_tracker import ChatSessionTracker
     interrupted = ChatSessionTracker.get_interrupted_sessions()
 
-    resumed_ids = []
+    # Deduplica sessões por conv_id
+    unique_sessions = {}
     if interrupted:
         for s in interrupted:
             cid = s.get("conv_id")
-            url = s.get("url")
-            if not cid:
+            if cid and cid not in unique_sessions:
+                unique_sessions[cid] = s
+
+    resumed_ids = []
+    now = time.time()
+
+    if unique_sessions:
+        for cid, s in unique_sessions.items():
+            # Debounce: se já enviou para esta conversa nos últimos 8s, ignora
+            if now - _last_continue_timestamps.get(cid, 0) < 8.0:
                 continue
+            _last_continue_timestamps[cid] = now
+
+            url = s.get("url")
             res = send_continue_to_antigravity(
                 prompt_text=prompt_text,
                 target_conv_id=cid,
@@ -412,12 +426,17 @@ def resume_interrupted_sessions(delay_seconds: float = 3.0, prompt_text: str = "
             )
             if res.get("success"):
                 resumed_ids.append(cid)
-                ChatSessionTracker.clear_interrupted_sessions(conv_id=cid)
     else:
-        # Fallback inteligente: injeta na conversa que estiver aberta no Antigravity
-        res = send_continue_to_antigravity(prompt_text=prompt_text, max_wait_seconds=20.0)
-        if res.get("success"):
-            resumed_ids.append(res.get("path", "active_chat"))
+        # Fallback inteligente: injeta uma única vez na conversa aberta
+        fallback_key = "active_page"
+        if now - _last_continue_timestamps.get(fallback_key, 0) >= 8.0:
+            _last_continue_timestamps[fallback_key] = now
+            res = send_continue_to_antigravity(prompt_text=prompt_text, max_wait_seconds=20.0)
+            if res.get("success"):
+                resumed_ids.append(res.get("path", "active_chat"))
+
+    # Limpa arquivo de sessões interrompidas para nunca reprocessar
+    ChatSessionTracker.clear_interrupted_sessions()
 
     return {
         "success": True,
