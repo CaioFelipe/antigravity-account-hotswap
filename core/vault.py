@@ -280,6 +280,11 @@ class AccountsVault:
         if set_active or data.get("active_account_id") is None:
             data["active_account_id"] = account["id"]
             account["status"] = "ACTIVE"
+            # Rebaixa qualquer outra conta que ainda estivesse marcada como ACTIVE,
+            # evitando duas contas "ativas" simultaneamente no cofre.
+            for other in data.get("accounts", []):
+                if other.get("id") != account["id"] and other.get("status") == "ACTIVE":
+                    other["status"] = "READY"
 
         self._save(data)
         return account
