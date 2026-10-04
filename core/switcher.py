@@ -4,6 +4,7 @@ import base64
 import datetime
 import urllib.request
 import urllib.parse
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 from .wincred import read_credential, write_credential
@@ -12,6 +13,30 @@ from .quota_checker import get_all_accounts_quota_map
 from .ide_reloader import apply_hotswap_reload
 
 TARGET_CREDENTIAL = "gemini:antigravity"
+
+# Trava de arquivo (compartilhada entre processos) contra trocas de conta em sequência
+# rápida. O Antigravity reinicia o language_server e migra de porta a cada troca; se uma
+# segunda troca começar antes da primeira estabilizar, o Electron pode tentar recarregar
+# a janela numa porta que já ficou obsoleta, resultando em tela preta (chrome-error://).
+SWITCH_LOCK_FILE = Path(__file__).resolve().parent.parent / "data" / "switch_lock.json"
+SWITCH_COOLDOWN_SECONDS = 25.0
+
+def _get_last_switch_at() -> float:
+    try:
+        if SWITCH_LOCK_FILE.exists():
+            with open(SWITCH_LOCK_FILE, "r", encoding="utf-8") as f:
+                return float(json.load(f).get("last_switch_at", 0.0))
+    except Exception:
+        pass
+    return 0.0
+
+def _record_switch_now() -> None:
+    try:
+        SWITCH_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SWITCH_LOCK_FILE, "w", encoding="utf-8") as f:
+            json.dump({"last_switch_at": time.time()}, f)
+    except Exception:
+        pass
 
 from .oauth_config import get_google_oauth_client
 
@@ -99,6 +124,24 @@ class AccountSwitcher:
         account = self.vault.get_account(account_id)
         if not account:
             return {"success": False, "message": f"Conta '{account_id}' não encontrada."}
+
+        # Bloqueia trocas em sequência rápida demais: o Antigravity ainda pode estar
+        # migrando de porta por causa da troca anterior, e uma segunda troca agora
+        # pode fazer o Electron recarregar numa porta já morta (tela preta).
+        elapsed = time.time() - _get_last_switch_at()
+        if elapsed < SWITCH_COOLDOWN_SECONDS:
+            wait_s = int(SWITCH_COOLDOWN_SECONDS - elapsed) + 1
+            return {
+                "success": False,
+                "cooldown_active": True,
+                "retry_after_seconds": wait_s,
+                "message": (
+                    f"Aguarde ~{wait_s}s antes de trocar de conta novamente: o Antigravity ainda "
+                    f"pode estar estabilizando a troca anterior. Trocar agora pode deixar a "
+                    f"interface com tela preta."
+                )
+            }
+        _record_switch_now()
 
         blob_str = account.get("blob", "")
         username = account.get("username", "antigravity")

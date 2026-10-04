@@ -816,7 +816,7 @@
         if (data.success) {
           showToast(`✅ ${data.message}`);
         } else {
-          showToast(`❌ ${data.message}`);
+          showToast(`❌ ${data.message}`, data.cooldown_active ? 8000 : 4000);
         }
         fetchStatus();
       } catch (e) {
