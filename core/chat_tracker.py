@@ -85,6 +85,21 @@ class ChatSessionTracker:
         """
         Registra as sessões de conversas abertas e conectadas no Antigravity antes da troca.
         Captura tanto as que estão executando quanto as que estão abertas/ociosas aguardando,
+
+        LIMITAÇÃO CONHECIDA (investigada e confirmada ao vivo): dentro de UMA ÚNICA janela,
+        o Antigravity é uma SPA com roteamento client-side - só existe um DOM montado por vez,
+        o da conversa atualmente em foco. Se houver outra conversa rodando em segundo plano
+        nessa MESMA janela (aberta via sidebar, mas não focada no momento do hot-swap), ela é
+        INVISÍVEL para esta função e não entra no snapshot - não receberá o 'continue' depois
+        do restart. Confirmei isso testando ao vivo (tarefa real rodando ficou sem detecção ao
+        navegar para outra conversa na mesma janela) e também inspecionei as 3 assinaturas
+        gRPC-Web candidatas do language_server (JetboxSubscribeToState, SubscribeToSidecars,
+        ProjectUpdatesStream) via CDP Network - nenhuma delas emite um evento quando uma tarefa
+        começa a rodar, então não há um canal de "todas as conversas em execução" para ler.
+        O próprio Antigravity parece ter essa mesma limitação na sua UI (sem indicador de
+        'rodando' na barra lateral para conversas não focadas).
+        Múltiplas JANELAS separadas (cada uma com sua própria sessão) funcionam corretamente,
+        pois cada janela é um target CDP independente e é inspecionada isoladamente.
         garantindo que o continue seja enviado para retomar o chat que o usuário está usando.
         Deduplica por conv_id para evitar envios redundantes.
         """

@@ -24,7 +24,9 @@ Sistema autônomo, limpo e de alta performance para gerenciamento de múltiplas 
 3. **Hot-Swap com 1 Clique (manual ou automático):**
    - Alterne instantaneamente entre contas Google cadastradas, manualmente pelo painel ou automaticamente pelo monitor de cota.
    - O sistema renova os tokens `access_token` e `id_token` junto ao Google e atualiza o Windows Credential Manager.
-   - Após a troca, tira um snapshot de todas as conversas abertas (ocupadas ou ociosas) e as retoma automaticamente depois do reinício — incluindo navegar de volta para a URL exata de cada conversa, caso o Antigravity reabra na tela inicial.
+   - Após a troca, tira um snapshot de todas as conversas abertas (ocupadas ou ociosas) e as retoma automaticamente depois do reinício — reconstruindo a URL de navegação com a porta ATUAL do Antigravity (que muda a cada restart do `language_server`), não a porta salva no snapshot.
+   - Uma trava de 25s entre trocas evita que duas trocas em sequência rápida corram contra a fila de reload do Electron.
+   - **Limitação conhecida:** isso funciona de forma confiável com várias **janelas** separadas do Antigravity (uma sessão por janela). Com várias conversas abertas dentro da **mesma janela** (via sidebar), só a conversa atualmente em foco no momento da troca é detectada — o Antigravity não expõe um canal de status para conversas rodando em segundo plano nessa mesma janela (investigado e confirmado; ver comentário em `core/chat_tracker.py`).
 4. **Cadastro de Contas Google:**
    - Fluxo automático: abre o navegador na página de login do Google e captura o retorno via servidor local. Pode falhar dependendo da instalação local (ver nota abaixo).
    - Plano B sempre confiável: faça login da conta direto no Antigravity e use "Sincronizar do Windows" no painel para capturá-la.

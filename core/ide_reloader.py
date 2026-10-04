@@ -620,13 +620,27 @@ def resume_interrupted_sessions(delay_seconds: float = 0.0, prompt_text: str = "
         port = get_devtools_port()
         pages = _list_cdp_pages(port) if port else []
 
+        # Mesmo cuidado da navegação principal: a URL salva no snapshot pode ter a porta
+        # de ANTES do restart, já morta agora. Reconstrói com a origem atual antes de abrir
+        # cada aba extra, em vez de abrir direto na URL antiga (causaria o mesmo erro de
+        # conexão recusada / tela preta, só que numa aba nova).
+        current_origin = get_current_content_origin()
+
+        def _rebuild_url(raw_url: Optional[str]) -> str:
+            if not raw_url:
+                return "about:blank"
+            if not current_origin:
+                return raw_url
+            parsed = urlparse(raw_url)
+            path_and_query = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+            return f"{current_origin}{path_and_query}"
+
         # Se há mais conversas interrompidas do que abas disponíveis, abre abas extras
-        # via CDP (Target.createTarget) diretamente na URL salva de cada conversa restante.
+        # via CDP (Target.createTarget) já na URL reconstruída de cada conversa restante.
         attempts = 0
         while port and len(pages) < len(sessions_list) and attempts < len(sessions_list):
             extra_cid, extra_s = sessions_list[len(pages)]
-            extra_url = extra_s.get("url")
-            new_tid = create_new_tab(extra_url or "about:blank")
+            new_tid = create_new_tab(_rebuild_url(extra_s.get("url")))
             attempts += 1
             if not new_tid:
                 break
@@ -637,10 +651,19 @@ def resume_interrupted_sessions(delay_seconds: float = 0.0, prompt_text: str = "
             if _is_debounced(cid, cooldown=8.0):
                 print(f"[Hot-Swap Watchdog] Conversa {cid} já recebeu continue recentemente (debounced).")
                 continue
+
+            if i >= len(pages):
+                # Não há aba dedicada para esta sessão (criação de aba extra falhou). Melhor
+                # desistir desta sessão específica do que usar target_page_id=None: isso faria
+                # a busca abranger TODAS as abas, podendo roubar a aba de uma conversa que uma
+                # sessão anterior já retomou corretamente neste mesmo loop.
+                print(f"[Hot-Swap Watchdog] Sem aba disponível para retomar a conversa {cid} - pulando.")
+                continue
+
             _record_debounce(cid)
 
             url = s.get("url")
-            page_id = pages[i].get("id") if i < len(pages) else None
+            page_id = pages[i].get("id")
             res = send_continue_to_antigravity(
                 prompt_text=prompt_text,
                 target_conv_id=cid,
