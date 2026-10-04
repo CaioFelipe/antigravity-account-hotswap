@@ -73,10 +73,10 @@ SUCCESS_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <div class="card">
-    <div class="icon">✨</div>
-    <h2>Conta Conectada com Sucesso!</h2>
-    <p>O Hot-Swap de Contas já registrou sua credencial com todas as cotas e permissões.</p>
-    <p style="font-size: 0.84rem; color: #64748b;">Você pode fechar esta aba e voltar ao seu painel ou ao Antigravity.</p>
+    <div class="icon">⏳</div>
+    <h2>Autorização recebida, finalizando...</h2>
+    <p>O painel Hot-Swap está validando sua credencial junto ao Google agora.</p>
+    <p style="font-size: 0.84rem; color: #64748b;">Volte ao painel do Hot-Swap: se a conta não aparecer em alguns segundos, use o botão "Sincronizar do Windows" (Plano B) para garantir o cadastro.</p>
   </div>
   <script>
     setTimeout(() => { window.close(); }, 3000);

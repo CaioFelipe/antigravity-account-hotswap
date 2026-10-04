@@ -4,6 +4,7 @@ import base64
 import datetime
 import urllib.request
 import urllib.parse
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 from .wincred import read_credential, write_credential
@@ -12,6 +13,30 @@ from .quota_checker import get_all_accounts_quota_map
 from .ide_reloader import apply_hotswap_reload
 
 TARGET_CREDENTIAL = "gemini:antigravity"
+
+# Trava de arquivo (compartilhada entre processos) contra trocas de conta em sequência
+# rápida. O Antigravity reinicia o language_server e migra de porta a cada troca; se uma
+# segunda troca começar antes da primeira estabilizar, o Electron pode tentar recarregar
+# a janela numa porta que já ficou obsoleta, resultando em tela preta (chrome-error://).
+SWITCH_LOCK_FILE = Path(__file__).resolve().parent.parent / "data" / "switch_lock.json"
+SWITCH_COOLDOWN_SECONDS = 25.0
+
+def _get_last_switch_at() -> float:
+    try:
+        if SWITCH_LOCK_FILE.exists():
+            with open(SWITCH_LOCK_FILE, "r", encoding="utf-8") as f:
+                return float(json.load(f).get("last_switch_at", 0.0))
+    except Exception:
+        pass
+    return 0.0
+
+def _record_switch_now() -> None:
+    try:
+        SWITCH_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SWITCH_LOCK_FILE, "w", encoding="utf-8") as f:
+            json.dump({"last_switch_at": time.time()}, f)
+    except Exception:
+        pass
 
 from .oauth_config import get_google_oauth_client
 
@@ -64,7 +89,7 @@ class AccountSwitcher:
 
         # Calcula cotas em tempo real para todas as contas
         active_id = active.get("id") if active else None
-        quotas_map = get_all_accounts_quota_map(accounts, active_id)
+        quotas_map = get_all_accounts_quota_map(accounts, active_id, vault=self.vault)
 
         # Detecta sessões abertas no Antigravity
         sessions = []
@@ -99,6 +124,24 @@ class AccountSwitcher:
         account = self.vault.get_account(account_id)
         if not account:
             return {"success": False, "message": f"Conta '{account_id}' não encontrada."}
+
+        # Bloqueia trocas em sequência rápida demais: o Antigravity ainda pode estar
+        # migrando de porta por causa da troca anterior, e uma segunda troca agora
+        # pode fazer o Electron recarregar numa porta já morta (tela preta).
+        elapsed = time.time() - _get_last_switch_at()
+        if elapsed < SWITCH_COOLDOWN_SECONDS:
+            wait_s = int(SWITCH_COOLDOWN_SECONDS - elapsed) + 1
+            return {
+                "success": False,
+                "cooldown_active": True,
+                "retry_after_seconds": wait_s,
+                "message": (
+                    f"Aguarde ~{wait_s}s antes de trocar de conta novamente: o Antigravity ainda "
+                    f"pode estar estabilizando a troca anterior. Trocar agora pode deixar a "
+                    f"interface com tela preta."
+                )
+            }
+        _record_switch_now()
 
         blob_str = account.get("blob", "")
         username = account.get("username", "antigravity")
@@ -263,7 +306,14 @@ class AccountSwitcher:
             }
 
     def capture_active_wincred(self, name: str = "", email: str = "") -> Dict[str, Any]:
-        """Captura a credencial que está atualmente ativa no Windows e a adiciona ao cofre."""
+        """
+        Captura a credencial que está atualmente ativa no Windows e a adiciona ao cofre.
+        Extrai o e-mail REAL a partir do token (JWT) sempre que possível, em vez de usar
+        um texto fixo — e detecta quando a credencial capturada é apenas a MESMA conta já
+        cadastrada (ex: o usuário clicou em sincronizar antes de concluir o login da nova
+        conta dentro do próprio Antigravity), avisando claramente em vez de criar um
+        cadastro duplicado e confuso.
+        """
         current_cred = read_credential(TARGET_CREDENTIAL)
         if not current_cred:
             return {
@@ -271,22 +321,44 @@ class AccountSwitcher:
                 "message": "Nenhuma credencial ativa encontrada em 'gemini:antigravity' no Windows."
             }
 
+        from .vault import _extract_email_from_blob
+        real_email = _extract_email_from_blob(current_cred.get("blob", ""))
+        final_email = email or real_email or "sem_email@google.com"
+
+        existing = None
+        for acc_item in self.vault.list_accounts():
+            if acc_item.get("email", "").lower() == final_email.lower():
+                existing = acc_item
+                break
+
         acc = self.vault.add_or_update_account(
-            name=name or "Conta Antigravity Capturada",
-            email=email or "ativa@google.com",
+            name=name or (existing.get("name") if existing else "Conta Antigravity Capturada"),
+            email=final_email,
             blob=current_cred.get("blob", ""),
             username=current_cred.get("username", "antigravity"),
+            account_id=existing.get("id") if existing else None,
             set_active=True
         )
 
+        was_duplicate = bool(existing)
         self.vault.log_history(
             event_type="ACCOUNT_CAPTURED",
-            message=f"Conta '{acc.get('name')}' ({acc.get('email')}) capturada do cofre do Windows.",
+            message=f"Conta '{acc.get('name')}' ({acc.get('email')}) {'re-sincronizada' if was_duplicate else 'capturada'} do cofre do Windows.",
             details={"account_id": acc.get("id")}
         )
 
+        if was_duplicate:
+            message = (
+                f"A credencial ativa no Windows ainda é de '{acc.get('name')}' ({acc.get('email')}) — "
+                f"nenhuma conta NOVA foi detectada. Faça o login com a OUTRA conta Google dentro do "
+                f"próprio Antigravity primeiro e só então clique em sincronizar novamente."
+            )
+        else:
+            message = f"Conta '{acc.get('name')}' ({acc.get('email')}) capturada e registrada com sucesso!"
+
         return {
             "success": True,
-            "message": f"Conta '{acc.get('name')}' capturada e registrada com sucesso!",
-            "account": acc
+            "message": message,
+            "account": acc,
+            "was_duplicate": was_duplicate
         }

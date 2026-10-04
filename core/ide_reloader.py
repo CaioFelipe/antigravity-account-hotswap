@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import json
@@ -8,11 +9,45 @@ import threading
 import urllib.request
 import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Dict, Any, Optional, List
 import psutil
 
 DEVTOOLS_PORT_FILE = Path(os.path.expanduser(r"~\AppData\Roaming\Antigravity\DevToolsActivePort"))
 ANTIGRAVITY_EXE = Path(os.path.expanduser(r"~\AppData\Local\Programs\antigravity\Antigravity.exe"))
+ANTIGRAVITY_MAIN_LOG = Path(os.path.expanduser(r"~\AppData\Roaming\Antigravity\logs\main.log"))
+
+def get_current_content_origin() -> Optional[str]:
+    """
+    Lê o main.log do Antigravity e retorna a origem (https://127.0.0.1:PORT) do conteúdo
+    web ATUAL - a porta mais recente que o próprio Antigravity relatou ter carregado
+    ('Local:' na inicialização, ou '[Auto-Restart] Port changed!' após um restart do
+    language_server). Essa é a fonte de verdade mais confiável para reconstruir a URL de
+    navegação: ao contrário de ler window.location.href via CDP, não é afetada pela página
+    já estar travada em chrome-error:// (já que a leitura é feita direto do que o próprio
+    Antigravity escreveu, independente do estado atual do webview).
+    """
+    try:
+        if not ANTIGRAVITY_MAIN_LOG.exists():
+            return None
+        # Lê só os últimos ~8KB - a porta mais recente está sempre perto do final do arquivo
+        with open(ANTIGRAVITY_MAIN_LOG, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 8192))
+            tail = f.read().decode("utf-8", errors="ignore")
+        # Restrito às linhas AUTORITATIVAS ("Local:" na inicialização, ou "Port changed!"
+        # após um restart) - nunca às linhas de erro "Failed to load URL", que também
+        # contêm uma URL com porta, mas é exatamente a porta MORTA que causou o erro.
+        matches = re.findall(
+            r"(?:Port changed! Reloading all windows with URL: |Local:\s+)https://127\.0\.0\.1:(\d+)/?",
+            tail
+        )
+        if matches:
+            return f"https://127.0.0.1:{matches[-1]}"
+    except Exception:
+        pass
+    return None
 
 def get_devtools_port() -> Optional[int]:
     """Obtém a porta ativa do DevTools do Electron/Antigravity."""
@@ -168,6 +203,109 @@ def _eval_ws_expression(host: str, port: int, path: str, expression: str, timeou
             pass
         return None
 
+def get_devtools_browser_path() -> Optional[str]:
+    """Obtém o path do endpoint CDP de nível browser (linha 2 do DevToolsActivePort)."""
+    if not DEVTOOLS_PORT_FILE.exists():
+        return None
+    try:
+        lines = DEVTOOLS_PORT_FILE.read_text(encoding="utf-8").strip().splitlines()
+        if len(lines) > 1 and lines[1].startswith("/devtools/browser/"):
+            return lines[1].strip()
+    except Exception:
+        pass
+    return None
+
+def _list_cdp_pages(port: int) -> List[dict]:
+    """Lista todas as abas/páginas (targets) ativas no DevTools do Electron."""
+    try:
+        url = f"http://127.0.0.1:{port}/json/list"
+        with urllib.request.urlopen(urllib.request.Request(url), timeout=1.5) as resp:
+            return [t for t in json.loads(resp.read().decode()) if t.get("type") == "page"]
+    except Exception:
+        return []
+
+def _cdp_navigate(host: str, port: int, path: str, url: str) -> bool:
+    """
+    Navega uma aba CDP existente para a URL salva via Page.navigate.
+    Mais robusto que window.location.href via JS, pois não depende do
+    contexto de execução da página continuar responsivo.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(3.0)
+    try:
+        s.connect((host, port))
+        key = base64.b64encode(os.urandom(16)).decode("ascii")
+        handshake = (
+            f"GET {path} HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            f"Upgrade: websocket\r\n"
+            f"Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n\r\n"
+        )
+        s.sendall(handshake.encode("ascii"))
+        resp = s.recv(1024).decode("latin1")
+        if "101" not in resp:
+            s.close()
+            return False
+        cmd_id = int(time.time() * 1000) % 100000
+        s.sendall(_build_ws_frame({"id": cmd_id, "method": "Page.navigate", "params": {"url": url}}))
+        _read_ws_frame(s, expected_id=cmd_id)
+        s.close()
+        return True
+    except Exception:
+        try:
+            s.close()
+        except Exception:
+            pass
+        return False
+
+def create_new_tab(url: str) -> Optional[str]:
+    """
+    Abre uma nova aba no Electron via CDP de nível browser (Target.createTarget),
+    usado quando há mais conversas interrompidas do que abas disponíveis para retomar.
+    Retorna o targetId da nova aba, ou None em caso de falha.
+    """
+    port = get_devtools_port()
+    browser_path = get_devtools_browser_path()
+    if not port or not browser_path:
+        return None
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(4.0)
+    try:
+        s.connect(("127.0.0.1", port))
+        key = base64.b64encode(os.urandom(16)).decode("ascii")
+        handshake = (
+            f"GET {browser_path} HTTP/1.1\r\n"
+            f"Host: 127.0.0.1:{port}\r\n"
+            f"Upgrade: websocket\r\n"
+            f"Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n\r\n"
+        )
+        s.sendall(handshake.encode("ascii"))
+        resp = s.recv(1024).decode("latin1")
+        if "101" not in resp:
+            s.close()
+            return None
+        cmd_id = int(time.time() * 1000) % 100000
+        s.sendall(_build_ws_frame({
+            "id": cmd_id,
+            "method": "Target.createTarget",
+            "params": {"url": url, "newWindow": False}
+        }))
+        resp_json = _read_ws_frame(s, expected_id=cmd_id)
+        s.close()
+        if resp_json:
+            return resp_json.get("result", {}).get("targetId")
+        return None
+    except Exception:
+        try:
+            s.close()
+        except Exception:
+            pass
+        return None
+
 def restart_language_server() -> bool:
     """
     Reinicia o language_server do Antigravity via RPC interno.
@@ -255,36 +393,25 @@ def send_continue_to_antigravity(
     prompt_text: str = "continue",
     target_conv_id: Optional[str] = None,
     saved_url: Optional[str] = None,
-    max_wait_seconds: float = 20.0
+    max_wait_seconds: float = 30.0,
+    target_page_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Injeta e envia automaticamente uma mensagem no chat do Google Antigravity.
     Se target_conv_id for fornecido, garante que o comando seja enviado EXCLUSIVAMENTE
-    na conversa correspondente, evitando criar novos chats indesejados.
+    na conversa correspondente. Se a aba atual não estiver nessa conversa (ex: após um
+    restart completo do Antigravity, que reabre na tela inicial '/'), navega ativamente
+    até saved_url via CDP (Page.navigate) antes de tentar injetar, em vez de desistir.
+    Se target_page_id for fornecido, a operação é restrita a essa aba específica,
+    evitando colisão quando várias conversas estão sendo retomadas em paralelo.
     """
     start_time = time.time()
     escaped_prompt = json.dumps(prompt_text)
-    escaped_target_id = json.dumps(target_conv_id) if target_conv_id else "null"
-    escaped_saved_url = json.dumps(saved_url) if saved_url else "null"
 
-    js_code = f"""
+    check_js = "(() => ({ pathname: window.location.pathname || '', href: window.location.href }))()"
+
+    inject_js = f"""
     (async () => {{
-        const targetId = {escaped_target_id};
-        const savedUrl = {escaped_saved_url};
-        const pathname = window.location.pathname || '';
-
-        // Se uma conversa específica foi solicitada, validar que estamos nela
-        if (targetId) {{
-            if (!pathname.includes(targetId)) {{
-                return {{ status: 'wrong_conversation', currentPath: pathname }};
-            }}
-        }} else {{
-            // Se nenhum targetId foi passado, evitar injetar se a tela for Novo Chat (/)
-            if (!pathname.includes('/c/')) {{
-                return {{ status: 'no_active_conversation', currentPath: pathname }};
-            }}
-        }}
-
         const editor = document.querySelector('[contenteditable="true"], [aria-label="Message input"]');
         if (!editor) return {{ status: 'waiting_editor' }};
 
@@ -336,9 +463,11 @@ def send_continue_to_antigravity(
 
         await new Promise(r => setTimeout(r, 150));
 
-        return {{ status: 'sent', path: pathname }};
+        return {{ status: 'sent', path: window.location.pathname }};
     }})()
     """
+
+    navigated = False
 
     while time.time() - start_time < max_wait_seconds:
         port = get_devtools_port()
@@ -346,37 +475,69 @@ def send_continue_to_antigravity(
             time.sleep(0.5)
             continue
 
-        try:
-            url = f"http://127.0.0.1:{port}/json/list"
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
-                targets = json.loads(resp.read().decode())
+        pages = _list_cdp_pages(port)
+        if not pages:
+            time.sleep(0.5)
+            continue
 
-            pages = [t for t in targets if t.get("type") == "page"]
-            if not pages:
-                time.sleep(0.5)
+        candidate_pages = [p for p in pages if p.get("id") == target_page_id] if target_page_id else pages
+
+        made_progress = False
+        for page in candidate_pages:
+            tid = page.get("id")
+            if not tid:
+                continue
+            path = f"/devtools/page/{tid}"
+
+            st = _eval_ws_expression("127.0.0.1", port, path, check_js) or {}
+            pathname = st.get("pathname", "")
+            current_href = st.get("href", "")
+
+            if target_conv_id:
+                on_target = target_conv_id in pathname
+            else:
+                on_target = "/c/" in pathname
+
+            if not on_target:
+                if saved_url and not navigated:
+                    # IMPORTANTE: nunca navega para saved_url literalmente. O Antigravity troca
+                    # de porta a cada restart do language_server, então a porta capturada no
+                    # snapshot (antes deste restart) já pode estar morta agora. Reconstrói a URL
+                    # usando a ORIGEM ATUAL real + o caminho/query salvos (conv_id e section, que
+                    # continuam válidos entre restarts). Prioriza a origem lida do main.log do
+                    # Antigravity (imune a chrome-error://), com fallback para o href atual via CDP.
+                    target_url = saved_url
+                    current_origin = get_current_content_origin()
+                    if not current_origin and current_href:
+                        parsed_current = urlparse(current_href)
+                        if parsed_current.scheme and parsed_current.netloc and parsed_current.scheme != "chrome-error":
+                            current_origin = f"{parsed_current.scheme}://{parsed_current.netloc}"
+                    if current_origin:
+                        parsed_saved = urlparse(saved_url)
+                        path_and_query = parsed_saved.path + (f"?{parsed_saved.query}" if parsed_saved.query else "")
+                        target_url = f"{current_origin}{path_and_query}"
+
+                    if _cdp_navigate("127.0.0.1", port, path, target_url):
+                        navigated = True
+                        made_progress = True
+                        time.sleep(1.8)  # dá tempo da SPA carregar a rota antes de tentar injetar
                 continue
 
-            for page in pages:
-                tid = page.get("id")
-                if not tid:
-                    continue
-                path = f"/devtools/page/{tid}"
-                res = _eval_ws_expression("127.0.0.1", port, path, js_code)
-                if isinstance(res, dict):
-                    st = res.get("status")
-                    if st == "sent":
-                        return {
-                            "success": True,
-                            "message": f"Comando '{prompt_text}' injetado com sucesso na conversa!",
-                            "path": res.get("path")
-                        }
-                    elif st == "still_busy":
-                        break
-        except Exception:
-            pass
+            res = _eval_ws_expression("127.0.0.1", port, path, inject_js)
+            if isinstance(res, dict):
+                stv = res.get("status")
+                if stv == "sent":
+                    return {
+                        "success": True,
+                        "message": f"Comando '{prompt_text}' injetado com sucesso na conversa!",
+                        "path": res.get("path")
+                    }
+                elif stv == "still_busy":
+                    made_progress = True
+                    break
 
-        time.sleep(0.6)
+        if not made_progress:
+            time.sleep(0.6)
 
     return {
         "success": False,
@@ -455,18 +616,60 @@ def resume_interrupted_sessions(delay_seconds: float = 0.0, prompt_text: str = "
 
     resumed_ids = []
     if unique_sessions:
-        for cid, s in unique_sessions.items():
+        sessions_list = list(unique_sessions.items())
+        port = get_devtools_port()
+        pages = _list_cdp_pages(port) if port else []
+
+        # Mesmo cuidado da navegação principal: a URL salva no snapshot pode ter a porta
+        # de ANTES do restart, já morta agora. Reconstrói com a origem atual antes de abrir
+        # cada aba extra, em vez de abrir direto na URL antiga (causaria o mesmo erro de
+        # conexão recusada / tela preta, só que numa aba nova).
+        current_origin = get_current_content_origin()
+
+        def _rebuild_url(raw_url: Optional[str]) -> str:
+            if not raw_url:
+                return "about:blank"
+            if not current_origin:
+                return raw_url
+            parsed = urlparse(raw_url)
+            path_and_query = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+            return f"{current_origin}{path_and_query}"
+
+        # Se há mais conversas interrompidas do que abas disponíveis, abre abas extras
+        # via CDP (Target.createTarget) já na URL reconstruída de cada conversa restante.
+        attempts = 0
+        while port and len(pages) < len(sessions_list) and attempts < len(sessions_list):
+            extra_cid, extra_s = sessions_list[len(pages)]
+            new_tid = create_new_tab(_rebuild_url(extra_s.get("url")))
+            attempts += 1
+            if not new_tid:
+                break
+            time.sleep(1.0)
+            pages = _list_cdp_pages(port)
+
+        for i, (cid, s) in enumerate(sessions_list):
             if _is_debounced(cid, cooldown=8.0):
                 print(f"[Hot-Swap Watchdog] Conversa {cid} já recebeu continue recentemente (debounced).")
                 continue
+
+            if i >= len(pages):
+                # Não há aba dedicada para esta sessão (criação de aba extra falhou). Melhor
+                # desistir desta sessão específica do que usar target_page_id=None: isso faria
+                # a busca abranger TODAS as abas, podendo roubar a aba de uma conversa que uma
+                # sessão anterior já retomou corretamente neste mesmo loop.
+                print(f"[Hot-Swap Watchdog] Sem aba disponível para retomar a conversa {cid} - pulando.")
+                continue
+
             _record_debounce(cid)
 
             url = s.get("url")
+            page_id = pages[i].get("id")
             res = send_continue_to_antigravity(
                 prompt_text=prompt_text,
                 target_conv_id=cid,
                 saved_url=url,
-                max_wait_seconds=25.0
+                max_wait_seconds=30.0,
+                target_page_id=page_id
             )
             if res.get("success"):
                 resumed_ids.append(cid)
@@ -489,7 +692,7 @@ def resume_interrupted_sessions(delay_seconds: float = 0.0, prompt_text: str = "
 def wait_and_resume_after_restart(
     old_pids: Optional[List[int]] = None,
     prompt_text: str = "continue",
-    max_wait_seconds: float = 35.0
+    max_wait_seconds: float = 45.0
 ) -> Dict[str, Any]:
     """
     Sincronização determinística pós-restart:

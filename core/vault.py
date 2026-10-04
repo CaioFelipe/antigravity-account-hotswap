@@ -280,9 +280,42 @@ class AccountsVault:
         if set_active or data.get("active_account_id") is None:
             data["active_account_id"] = account["id"]
             account["status"] = "ACTIVE"
+            # Rebaixa qualquer outra conta que ainda estivesse marcada como ACTIVE,
+            # evitando duas contas "ativas" simultaneamente no cofre.
+            for other in data.get("accounts", []):
+                if other.get("id") != account["id"] and other.get("status") == "ACTIVE":
+                    other["status"] = "READY"
 
         self._save(data)
         return account
+
+    def update_account_quota_snapshot(
+        self,
+        account_id: str,
+        quota_5h: Dict[str, Any],
+        quota_weekly: Dict[str, Any],
+        models: Optional[List[Dict[str, Any]]] = None
+    ) -> None:
+        """
+        Persiste a última leitura REAL de cota conhecida para a conta (vinda diretamente
+        do language_server, enquanto ela era a conta ativa). Isso evita que a conta volte
+        a aparecer como '100% livre' por padrão só porque ficou inativa ou porque o painel/
+        servidor foi reiniciado - sem essa persistência, o estado real da cota era perdido.
+        Faz throttle de 15s para não reescrever o arquivo a cada poll de 4s do painel web.
+        """
+        data = self._load()
+        now = time.time()
+        for acc in data.get("accounts", []):
+            if acc.get("id") == account_id:
+                last_checked = acc.get("last_quota_checked_at") or 0
+                if (now - last_checked) < 15.0:
+                    return
+                acc["last_quota_5h"] = quota_5h
+                acc["last_quota_weekly"] = quota_weekly
+                acc["last_quota_models"] = models or []
+                acc["last_quota_checked_at"] = now
+                self._save(data)
+                return
 
     def update_account_schedule(self, account_id: str, weekly_reset_day: int, weekly_reset_time: str) -> Optional[Dict[str, Any]]:
         """Atualiza a programação de renovação semanal da conta."""
