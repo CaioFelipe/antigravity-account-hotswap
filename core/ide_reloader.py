@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import json
@@ -8,11 +9,45 @@ import threading
 import urllib.request
 import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Dict, Any, Optional, List
 import psutil
 
 DEVTOOLS_PORT_FILE = Path(os.path.expanduser(r"~\AppData\Roaming\Antigravity\DevToolsActivePort"))
 ANTIGRAVITY_EXE = Path(os.path.expanduser(r"~\AppData\Local\Programs\antigravity\Antigravity.exe"))
+ANTIGRAVITY_MAIN_LOG = Path(os.path.expanduser(r"~\AppData\Roaming\Antigravity\logs\main.log"))
+
+def get_current_content_origin() -> Optional[str]:
+    """
+    Lê o main.log do Antigravity e retorna a origem (https://127.0.0.1:PORT) do conteúdo
+    web ATUAL - a porta mais recente que o próprio Antigravity relatou ter carregado
+    ('Local:' na inicialização, ou '[Auto-Restart] Port changed!' após um restart do
+    language_server). Essa é a fonte de verdade mais confiável para reconstruir a URL de
+    navegação: ao contrário de ler window.location.href via CDP, não é afetada pela página
+    já estar travada em chrome-error:// (já que a leitura é feita direto do que o próprio
+    Antigravity escreveu, independente do estado atual do webview).
+    """
+    try:
+        if not ANTIGRAVITY_MAIN_LOG.exists():
+            return None
+        # Lê só os últimos ~8KB - a porta mais recente está sempre perto do final do arquivo
+        with open(ANTIGRAVITY_MAIN_LOG, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 8192))
+            tail = f.read().decode("utf-8", errors="ignore")
+        # Restrito às linhas AUTORITATIVAS ("Local:" na inicialização, ou "Port changed!"
+        # após um restart) - nunca às linhas de erro "Failed to load URL", que também
+        # contêm uma URL com porta, mas é exatamente a porta MORTA que causou o erro.
+        matches = re.findall(
+            r"(?:Port changed! Reloading all windows with URL: |Local:\s+)https://127\.0\.0\.1:(\d+)/?",
+            tail
+        )
+        if matches:
+            return f"https://127.0.0.1:{matches[-1]}"
+    except Exception:
+        pass
+    return None
 
 def get_devtools_port() -> Optional[int]:
     """Obtém a porta ativa do DevTools do Electron/Antigravity."""
@@ -456,6 +491,7 @@ def send_continue_to_antigravity(
 
             st = _eval_ws_expression("127.0.0.1", port, path, check_js) or {}
             pathname = st.get("pathname", "")
+            current_href = st.get("href", "")
 
             if target_conv_id:
                 on_target = target_conv_id in pathname
@@ -464,7 +500,24 @@ def send_continue_to_antigravity(
 
             if not on_target:
                 if saved_url and not navigated:
-                    if _cdp_navigate("127.0.0.1", port, path, saved_url):
+                    # IMPORTANTE: nunca navega para saved_url literalmente. O Antigravity troca
+                    # de porta a cada restart do language_server, então a porta capturada no
+                    # snapshot (antes deste restart) já pode estar morta agora. Reconstrói a URL
+                    # usando a ORIGEM ATUAL real + o caminho/query salvos (conv_id e section, que
+                    # continuam válidos entre restarts). Prioriza a origem lida do main.log do
+                    # Antigravity (imune a chrome-error://), com fallback para o href atual via CDP.
+                    target_url = saved_url
+                    current_origin = get_current_content_origin()
+                    if not current_origin and current_href:
+                        parsed_current = urlparse(current_href)
+                        if parsed_current.scheme and parsed_current.netloc and parsed_current.scheme != "chrome-error":
+                            current_origin = f"{parsed_current.scheme}://{parsed_current.netloc}"
+                    if current_origin:
+                        parsed_saved = urlparse(saved_url)
+                        path_and_query = parsed_saved.path + (f"?{parsed_saved.query}" if parsed_saved.query else "")
+                        target_url = f"{current_origin}{path_and_query}"
+
+                    if _cdp_navigate("127.0.0.1", port, path, target_url):
                         navigated = True
                         made_progress = True
                         time.sleep(1.8)  # dá tempo da SPA carregar a rota antes de tentar injetar
